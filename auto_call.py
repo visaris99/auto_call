@@ -9,12 +9,41 @@ import sys
 import json
 import threading
 import re
+import traceback  # 에러 추적용
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 # 테마 설정
-ctk.set_appearance_mode("light")  # "light", "dark", "system"
-ctk.set_default_color_theme("blue")  # "blue", "green", "dark-blue"
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
+
+# === [핵심 수정 1] 절대 경로 및 에러 로그 함수 ===
+def get_base_path():
+    """ 실행 파일(exe)이 있는 폴더의 절대 경로를 반환 """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller로 빌드된 exe 실행 시
+        return os.path.dirname(sys.executable)
+    else:
+        # 일반 파이썬 스크립트 실행 시
+        return os.path.dirname(os.path.abspath(__file__))
+
+def get_adb_path():
+    """ adb.exe의 절대 경로 반환 """
+    return os.path.join(get_base_path(), "adb.exe")
+
+def log_error(msg):
+    """ 에러 발생 시 프로그램 옆에 error_log.txt 파일 생성 """
+    try:
+        log_file = os.path.join(get_base_path(), "error_log.txt")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {msg}\n")
+    except:
+        pass  # 로그 파일 생성 실패는 무시
+
+# 윈도우 콘솔창 숨기기 옵션 (깜빡임 방지)
+STARTUP_INFO = subprocess.STARTUPINFO()
+STARTUP_INFO.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
 
 class Config:
@@ -23,10 +52,10 @@ class Config:
     STATE_FILE = "tm_state.json"
     
     COLORS = {
-        "call": "#22c55e",      # 초록
-        "hangup": "#ef4444",    # 빨강
-        "save": "#3b82f6",      # 파랑
-        "skip": "#6b7280",      # 회색
+        "call": "#22c55e",
+        "hangup": "#ef4444",
+        "save": "#3b82f6",
+        "skip": "#6b7280",
         "highlight_red": "FFCCCC",
         "highlight_yellow": "FFFF00"
     }
@@ -121,29 +150,40 @@ class ColumnDetector:
 class StateManager:
     @staticmethod
     def save(agent_name: str, file_path: str, index: int, column_mapping: dict):
-        state = {
-            "agent_name": agent_name, "file_path": file_path,
-            "current_index": index,
-            "column_mapping": {str(k): v for k, v in column_mapping.items()},
-            "saved_at": datetime.datetime.now().isoformat()
-        }
-        with open(Config.STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(state, f, ensure_ascii=False)
+        try:
+            state = {
+                "agent_name": agent_name, "file_path": file_path,
+                "current_index": index,
+                "column_mapping": {str(k): v for k, v in column_mapping.items()},
+                "saved_at": datetime.datetime.now().isoformat()
+            }
+            # 상태 파일도 exe 위치에 저장
+            path = os.path.join(get_base_path(), Config.STATE_FILE)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(state, f, ensure_ascii=False)
+        except Exception as e:
+            log_error(f"Save State Error: {e}")
     
     @staticmethod
     def load() -> dict | None:
-        if not os.path.exists(Config.STATE_FILE):
+        path = os.path.join(get_base_path(), Config.STATE_FILE)
+        if not os.path.exists(path):
             return None
         try:
-            with open(Config.STATE_FILE, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
+        except Exception as e:
+            log_error(f"Load State Error: {e}")
             return None
     
     @staticmethod
     def clear():
-        if os.path.exists(Config.STATE_FILE):
-            os.remove(Config.STATE_FILE)
+        path = os.path.join(get_base_path(), Config.STATE_FILE)
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except:
+                pass
 
 
 class PhoneUtils:
@@ -170,27 +210,45 @@ class ADBController:
     @staticmethod
     def call(phone_number: str) -> bool:
         try:
-            cmd = f"adb shell am start -a android.intent.action.CALL -d tel:{phone_number}"
-            subprocess.run(cmd, shell=True, check=True, capture_output=True)
+            adb_exe = get_adb_path()
+            if not os.path.exists(adb_exe):
+                raise FileNotFoundError(f"ADB 파일을 찾을 수 없음: {adb_exe}")
+
+            # [수정] 리스트 형태 인자 전달 + shell=False (공백 경로 에러 방지)
+            cmd = [adb_exe, "shell", "am", "start", "-a", "android.intent.action.CALL", "-d", f"tel:{phone_number}"]
+            
+            subprocess.run(cmd, shell=False, check=True, capture_output=True, startupinfo=STARTUP_INFO)
             return True
-        except:
+        except Exception as e:
+            log_error(f"Call Error: {e}\n{traceback.format_exc()}")
             return False
     
     @staticmethod
     def hangup() -> bool:
         try:
-            subprocess.run("adb shell input keyevent 6", shell=True, check=True, capture_output=True)
+            adb_exe = get_adb_path()
+            cmd = [adb_exe, "shell", "input", "keyevent", "6"]
+            subprocess.run(cmd, shell=False, check=True, capture_output=True, startupinfo=STARTUP_INFO)
             return True
-        except:
+        except Exception as e:
+            log_error(f"Hangup Error: {e}")
             return False
     
     @staticmethod
     def is_connected() -> bool:
         try:
-            result = subprocess.run("adb devices", shell=True, capture_output=True, text=True)
+            adb_exe = get_adb_path()
+            # ADB 파일이 없으면 즉시 실패 처리 (불필요한 실행 방지)
+            if not os.path.exists(adb_exe):
+                return False
+
+            cmd = [adb_exe, "devices"]
+            result = subprocess.run(cmd, shell=False, capture_output=True, text=True, startupinfo=STARTUP_INFO)
             lines = result.stdout.strip().split('\n')
             return len(lines) > 1 and 'device' in lines[1]
-        except:
+        except Exception as e:
+            # 연결 확인 에러는 로그가 너무 많이 쌓일 수 있으므로 필요시 주석 해제
+            # log_error(f"Connection Check Error: {e}")
             return False
 
 
@@ -408,9 +466,13 @@ class TelemarketingApp:
         self.root.after(5000, self._check_adb)
 
     def load_excel(self):
-        path = filedialog.askopenfilename(filetypes=[("Excel/CSV", "*.xlsx *.xls *.csv")])
-        if path:
-            self._load_file(path)
+        try:
+            path = filedialog.askopenfilename(filetypes=[("Excel/CSV", "*.xlsx *.xls *.csv")])
+            if path:
+                self._load_file(path)
+        except Exception as e:
+            log_error(f"Load Excel Error: {e}")
+            CTkMessagebox(title="오류", message="파일 열기 실패 (로그 확인)", icon="cancel")
 
     def _load_file(self, path: str, idx: int = 0, mapping: dict = None):
         try:
@@ -439,18 +501,19 @@ class TelemarketingApp:
             self.btn_call.configure(state="normal")
             self.btn_skip.configure(state="normal")
         except Exception as e:
+            log_error(f"File Parsing Error: {e}")
             CTkMessagebox(title="오류", message=f"파일 로드 실패: {e}", icon="cancel")
 
     def _load_called(self):
-        filename = f"{datetime.datetime.now():%Y-%m-%d}_{self.agent_name}_기록.xlsx"
+        filename = os.path.join(get_base_path(), f"{datetime.datetime.now():%Y-%m-%d}_{self.agent_name}_기록.xlsx")
         if os.path.exists(filename):
             try:
                 wb = load_workbook(filename)
                 for row in wb.active.iter_rows(min_row=2, min_col=3, max_col=3, values_only=True):
                     if row[0]:
                         self.called_numbers.add(PhoneUtils.normalize(str(row[0])))
-            except:
-                pass
+            except Exception as e:
+                log_error(f"Load History Error: {e}")
 
     def _get_customer(self, row) -> dict:
         data = {'이름': '-', '전화번호': '', '기타정보': ''}
@@ -464,21 +527,24 @@ class TelemarketingApp:
             self._show_complete()
             return
         
-        c = self._get_customer(self.df.iloc[self.current_index])
-        phone = PhoneUtils.normalize(c['전화번호'])
-        
-        self.lbl_index.configure(text=f"[{self.current_index + 1}/{len(self.df)}]")
-        self.lbl_name.configure(text=c['이름'])
-        self.lbl_phone.configure(text=f"📱 {PhoneUtils.format_display(c['전화번호'])}")
-        self.lbl_etc.configure(text=f"기타: {c['기타정보']}" if c['기타정보'] else "")
-        self.lbl_dup.configure(text="⚠️ 오늘 이미 통화한 번호" if phone in self.called_numbers else "")
-        
-        self.progress.set(self.current_index / len(self.df))
-        self._disable_input()
-        self.btn_hangup.configure(state="disabled")
-        
-        if hasattr(self, '_current_file'):
-            StateManager.save(self.agent_name, self._current_file, self.current_index, self.column_mapping)
+        try:
+            c = self._get_customer(self.df.iloc[self.current_index])
+            phone = PhoneUtils.normalize(c['전화번호'])
+            
+            self.lbl_index.configure(text=f"[{self.current_index + 1}/{len(self.df)}]")
+            self.lbl_name.configure(text=c['이름'])
+            self.lbl_phone.configure(text=f"📱 {PhoneUtils.format_display(c['전화번호'])}")
+            self.lbl_etc.configure(text=f"기타: {c['기타정보']}" if c['기타정보'] else "")
+            self.lbl_dup.configure(text="⚠️ 오늘 이미 통화한 번호" if phone in self.called_numbers else "")
+            
+            self.progress.set(self.current_index / len(self.df))
+            self._disable_input()
+            self.btn_hangup.configure(state="disabled")
+            
+            if hasattr(self, '_current_file'):
+                StateManager.save(self.agent_name, self._current_file, self.current_index, self.column_mapping)
+        except Exception as e:
+            log_error(f"Display Error: {e}")
 
     def _show_complete(self):
         self.lbl_name.configure(text="✅ 업무 완료")
@@ -506,7 +572,9 @@ class TelemarketingApp:
             self.btn_hangup.configure(state="normal")
             self.called_numbers.add(phone)
         else:
-            CTkMessagebox(title="오류", message="전화 실패. ADB 확인 필요", icon="cancel")
+            # 실패 시 에러 로그 파일 위치 알려줌
+            log_path = os.path.join(get_base_path(), "error_log.txt")
+            CTkMessagebox(title="오류", message=f"전화 실패. 로그를 확인하세요.\n{log_path}", icon="cancel")
 
     def end_call(self):
         if str(self.btn_hangup.cget("state")) == "disabled":
@@ -534,66 +602,71 @@ class TelemarketingApp:
         if str(self.btn_save.cget("state")) == "disabled":
             return
         
-        c = self._get_customer(self.df.iloc[self.current_index])
-        result, memo = self.result_var.get(), self.entry_memo.get()
-        filename = f"{datetime.datetime.now():%Y-%m-%d}_{self.agent_name}_기록.xlsx"
-        
-        if not os.path.exists(filename):
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "상담기록"
-            ws.append(["날짜", "이름", "전화번호", "결과", "메모"])
-        else:
-            wb = load_workbook(filename)
-            ws = wb.active
-        
-        ws.append([datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), c['이름'], c['전화번호'], result, memo])
-        
-        # 스타일링
-        row = ws.max_row
-        fill = None
-        if "결번" in memo:
-            fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
-        elif result == "접수":
-            fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-        if fill:
-            for col in range(1, 6):
-                ws.cell(row=row, column=col).fill = fill
-        
-        self._update_stats(ws, filename)
-        
         try:
+            c = self._get_customer(self.df.iloc[self.current_index])
+            result, memo = self.result_var.get(), self.entry_memo.get()
+            filename = os.path.join(get_base_path(), f"{datetime.datetime.now():%Y-%m-%d}_{self.agent_name}_기록.xlsx")
+            
+            if not os.path.exists(filename):
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "상담기록"
+                ws.append(["날짜", "이름", "전화번호", "결과", "메모"])
+            else:
+                wb = load_workbook(filename)
+                ws = wb.active
+            
+            ws.append([datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), c['이름'], c['전화번호'], result, memo])
+            
+            # 스타일링
+            row = ws.max_row
+            fill = None
+            if "결번" in memo:
+                fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+            elif result == "접수":
+                fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            if fill:
+                for col in range(1, 6):
+                    ws.cell(row=row, column=col).fill = fill
+            
+            self._update_stats(ws, filename)
+            
             wb.save(filename)
+            self.next_customer()
         except PermissionError:
             CTkMessagebox(title="오류", message="엑셀 파일을 닫아주세요", icon="cancel")
             return
-        
-        self.next_customer()
+        except Exception as e:
+            log_error(f"Save Result Error: {e}")
+            CTkMessagebox(title="오류", message="저장 중 에러 발생", icon="cancel")
 
     def _update_stats(self, ws, filename):
-        results = [r[0] for r in ws.iter_rows(min_row=2, min_col=4, max_col=4, values_only=True) if r[0]]
-        stats = {k: results.count(k) for k in Config.RESULT_OPTIONS}
-        
-        border = Border(left=Side("thin"), right=Side("thin"), top=Side("thin"), bottom=Side("thin"))
-        align = Alignment(horizontal='center', vertical='center')
-        
-        ws["H2"] = filename.replace(".xlsx", "").replace("_기록", "")
-        ws.merge_cells("H2:I2")
-        ws["H2"].alignment = align
-        ws["H2"].font = Font(bold=True)
-        ws["H2"].border = border
-        
-        for i, opt in enumerate(Config.RESULT_OPTIONS):
-            for col, val in [(8, opt), (9, stats[opt])]:
-                cell = ws.cell(row=3+i, column=col, value=val)
+        try:
+            results = [r[0] for r in ws.iter_rows(min_row=2, min_col=4, max_col=4, values_only=True) if r[0]]
+            stats = {k: results.count(k) for k in Config.RESULT_OPTIONS}
+            
+            border = Border(left=Side("thin"), right=Side("thin"), top=Side("thin"), bottom=Side("thin"))
+            align = Alignment(horizontal='center', vertical='center')
+            
+            ws["H2"] = os.path.basename(filename).replace(".xlsx", "").replace("_기록", "")
+            ws.merge_cells("H2:I2")
+            ws["H2"].alignment = align
+            ws["H2"].font = Font(bold=True)
+            ws["H2"].border = border
+            
+            for i, opt in enumerate(Config.RESULT_OPTIONS):
+                for col, val in [(8, opt), (9, stats[opt])]:
+                    cell = ws.cell(row=3+i, column=col, value=val)
+                    cell.border = border
+                    cell.alignment = align
+            
+            for col, val in [(8, "총통화량"), (9, len(results))]:
+                cell = ws.cell(row=3+len(Config.RESULT_OPTIONS), column=col, value=val)
+                cell.font = Font(bold=True)
                 cell.border = border
                 cell.alignment = align
-        
-        for col, val in [(8, "총통화량"), (9, len(results))]:
-            cell = ws.cell(row=3+len(Config.RESULT_OPTIONS), column=col, value=val)
-            cell.font = Font(bold=True)
-            cell.border = border
-            cell.alignment = align
+        except Exception as e:
+            log_error(f"Stats Update Error: {e}")
 
     def next_customer(self):
         if str(self.btn_skip.cget("state")) == "disabled":
@@ -629,6 +702,11 @@ class TelemarketingApp:
 
 
 if __name__ == "__main__":
-    app = ctk.CTk()
-    TelemarketingApp(app)
-    app.mainloop()
+    try:
+        app = ctk.CTk()
+        TelemarketingApp(app)
+        app.mainloop()
+    except Exception as e:
+        # 프로그램 시작 실패 시에도 로그 남김
+        log_error(f"Fatal Startup Error: {e}\n{traceback.format_exc()}")
+        messagebox.showerror("치명적 오류", f"프로그램 시작 실패\n{e}")
