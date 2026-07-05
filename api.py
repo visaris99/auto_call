@@ -122,9 +122,6 @@ class ApiClient:
         return self._request("POST", f"/leads/{lead_id}/call", body,
                              headers={"Idempotency-Key": idempotency_key})
 
-    def save_memo(self, lead_id: str, memo: str) -> None:
-        self._request("PATCH", f"/leads/{lead_id}/memo", {"memo": memo})
-
     def check_version(self) -> dict | None:
         """서버 미구현(404 포함) 등 어떤 오류든 None — 버전 안내는 선택 기능."""
         try:

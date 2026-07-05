@@ -72,8 +72,14 @@ def font_family() -> str:
     return _resolved_family
 
 
-def font(size: int, weight: str = "normal"):
-    """CTkFont 팩토리 — tk 초기화 이후에만 호출할 것."""
-    import customtkinter as ctk
+_font_cache: dict = {}
 
-    return ctk.CTkFont(family=font_family(), size=size, weight=weight)
+
+def font(size: int, weight: str = "normal"):
+    """CTkFont 팩토리(캐시됨) — tk 초기화 이후에만 호출할 것."""
+    key = (size, weight)
+    if key not in _font_cache:
+        import customtkinter as ctk
+
+        _font_cache[key] = ctk.CTkFont(family=font_family(), size=size, weight=weight)
+    return _font_cache[key]

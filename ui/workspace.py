@@ -39,6 +39,7 @@ class WorkspaceFrame(ctk.CTkFrame):
         self.today_dials = 0
         self.today_won = 0
         self._notified_callbacks: set[str] = set()
+        self._row_items: list[tuple[dict, ctk.CTkFrame]] = []
         self._destroyed = False
 
         self._build()
@@ -107,17 +108,11 @@ class WorkspaceFrame(ctk.CTkFrame):
         self.phone_label = ctk.CTkLabel(card, text="-", font=font(17),
                                         text_color=COLORS["gold"])
         self.phone_label.pack(anchor="w", padx=20, pady=(6, 0))
-        memo_row = ctk.CTkFrame(card, fg_color="transparent")
-        memo_row.pack(fill="x", padx=20, pady=(8, 16))
-        ctk.CTkLabel(memo_row, text="리드 메모", font=font(11),
-                     text_color=COLORS["muted"]).pack(side="left")
-        self.lead_memo_entry = ctk.CTkEntry(memo_row, font=font(12), height=30,
-                                            placeholder_text="영업 메모 (칸반에 표시)")
-        self.lead_memo_entry.pack(side="left", fill="x", expand=True, padx=8)
-        ctk.CTkButton(memo_row, text="메모 저장", width=76, height=30, font=font(11),
-                      fg_color=COLORS["surface2"], text_color=COLORS["ink"],
-                      hover_color=COLORS["hover"],
-                      command=self.save_lead_memo).pack(side="left")
+        # 리드 메모는 관리자가 CRM에서 기록 — 여기서는 읽기 전용 표시만
+        self.lead_memo_label = ctk.CTkLabel(card, text="", font=font(12),
+                                            text_color=COLORS["muted"], anchor="w",
+                                            justify="left", wraplength=560)
+        self.lead_memo_label.pack(anchor="w", padx=20, pady=(4, 16))
 
         # 통화 컨트롤
         controls = ctk.CTkFrame(right, fg_color=COLORS["surface"], corner_radius=12,
@@ -193,11 +188,10 @@ class WorkspaceFrame(ctk.CTkFrame):
     def _on_queue(self, items: list[dict]):
         self.crm_dot.set_ok(True)
         self.leads = items
+        self._render_queue()
         ids = {x["id"] for x in items}
         if self.current is None or self.current["id"] not in ids:
             self._select(items[0] if items else None)
-        else:
-            self._render_queue()
 
     def _on_queue_error(self, exc: Exception):
         if isinstance(exc, AuthError):
@@ -205,17 +199,31 @@ class WorkspaceFrame(ctk.CTkFrame):
             return
         self.crm_dot.set_ok(False)
 
+    def _row_color(self, item: dict, now) -> str:
+        if is_callback_due(item, now):
+            return COLORS["brand_soft"]
+        if self.current is not None and item["id"] == self.current["id"]:
+            return COLORS["hover"]
+        return COLORS["surface"]
+
+    def _recolor_rows(self):
+        """선택 변경 시 색만 갱신 — 행 위젯 재생성 없음(성능)."""
+        now = now_local()
+        for item, row in self._row_items:
+            row.configure(fg_color=self._row_color(item, now))
+
     def _render_queue(self):
+        """큐 데이터가 바뀌었을 때만 전체 재구성."""
         for child in self.queue_box.winfo_children():
             child.destroy()
+        self._row_items: list[tuple[dict, ctk.CTkFrame]] = []
         now = now_local()
         for item in sort_queue(self.leads, now):
             due = is_callback_due(item, now)
-            selected = self.current is not None and item["id"] == self.current["id"]
-            bg = COLORS["brand_soft"] if due else (
-                COLORS["hover"] if selected else COLORS["surface"])
-            row = ctk.CTkFrame(self.queue_box, fg_color=bg, corner_radius=8)
+            row = ctk.CTkFrame(self.queue_box, fg_color=self._row_color(item, now),
+                               corner_radius=8)
             row.pack(fill="x", pady=2, padx=2)
+            self._row_items.append((item, row))
             name = item.get("name") or "(이름없음)"
             ctk.CTkLabel(row, text=name, font=font(13),
                          text_color=COLORS["ink"], anchor="w").pack(
@@ -241,28 +249,27 @@ class WorkspaceFrame(ctk.CTkFrame):
         if item is None:
             self.name_label.configure(text="대기 중인 콜이 없습니다")
             self.phone_label.configure(text="큐가 비어 있습니다 — 새 배정을 기다리세요")
-            self.lead_memo_entry.delete(0, "end")
+            self.lead_memo_label.configure(text="")
         else:
             self.name_label.configure(text=item.get("name") or "(이름없음)")
             self.phone_label.configure(text=item["phoneMasked"])
             Badge(self.badge_slot, item["status"]).pack()
-            self.lead_memo_entry.delete(0, "end")
-            if item.get("memo"):
-                self.lead_memo_entry.insert(0, item["memo"])
-        self._render_queue()
+            memo = item.get("memo")
+            self.lead_memo_label.configure(text=f"리드 메모: {memo}" if memo else "")
+        self._recolor_rows()
 
     # ---------- 통화 ----------
 
     def dial(self):
         if self.current is None or self.call_started is not None:
             return
-        if not adb.is_connected():
-            messagebox.showwarning("ADB", "휴대폰이 연결되지 않았습니다.\nUSB 연결과 디버깅 허용을 확인하세요.")
-            return
         lead = self.current
         self.dial_btn.configure(state="disabled", text="발신 중…")
 
         def work():
+            # ADB 확인·발신 모두 백그라운드에서 — UI 스레드가 멈추지 않게
+            if not adb.is_connected():
+                raise RuntimeError("휴대폰이 연결되지 않았습니다.\nUSB 연결과 디버깅 허용을 확인하세요.")
             phone = self.client.reveal(lead["id"])
             if not adb.call(phone):
                 raise RuntimeError("ADB 발신에 실패했습니다.")
@@ -310,15 +317,6 @@ class WorkspaceFrame(ctk.CTkFrame):
             self.callback_entry.pack(side="left", padx=(8, 0), before=self.save_btn)
         else:
             self.callback_entry.pack_forget()
-
-    def save_lead_memo(self):
-        if self.current is None:
-            return
-        lead = self.current
-        memo = self.lead_memo_entry.get().strip()
-        run_bg(self, lambda: self.client.save_memo(lead["id"], memo),
-               on_success=lambda _: Toast(self.winfo_toplevel(), "메모 저장됨"),
-               on_error=self._on_dial_error)
 
     def save_result(self):
         if self.current is None:

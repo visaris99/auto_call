@@ -56,13 +56,6 @@ def test_log_call_night_blocked(crm, client):
                         callback_at=None, idempotency_key="key-2")
 
 
-def test_save_memo_patches(crm, client):
-    crm.routes[("PATCH", "/api/v1/leads/L1/memo")] = (200, {"ok": True})
-    client.save_memo("L1", "메모 수정")
-    method, path, headers, body = crm.requests[-1]
-    assert method == "PATCH" and body == {"memo": "메모 수정"}
-
-
 def test_check_version_returns_none_when_missing(crm, client):
     assert client.check_version() is None  # 라우트 없음 → 404 → None
 
