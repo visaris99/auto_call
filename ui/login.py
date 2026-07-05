@@ -61,7 +61,7 @@ class LoginFrame(ctk.CTkFrame):
         ctk.CTkLabel(card, text="CRM 계정으로 로그인하세요", font=font(12),
                      text_color=COLORS["muted"]).pack(pady=(6, 4))
 
-        self.id_var = self._ascii_var()
+        self.id_var = ctk.StringVar()  # 아이디는 한글 허용
         self.id_entry = self._field(card, "아이디", textvariable=self.id_var)
         if self.config_data.last_login_id:
             self.id_var.set(self.config_data.last_login_id)
