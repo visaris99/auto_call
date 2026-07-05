@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import sys
 import traceback
 from tkinter import messagebox
 
@@ -34,10 +35,15 @@ class App(ctk.CTk):
         self.geometry("1000x680")
         self.minsize(920, 620)
         try:
-            import tkinter as tk
+            if sys.platform == "win32":
+                # iconbitmap을 직접 호출해야 CTk가 200ms 뒤 기본 아이콘으로
+                # 덮어쓰는 동작(_windows_set_titlebar_icon)을 건너뛴다.
+                self.iconbitmap(resource_path("assets/icon.ico"))
+            else:
+                import tkinter as tk
 
-            self._icon = tk.PhotoImage(file=resource_path("assets/milestone_logo.png"))
-            self.iconphoto(True, self._icon)
+                self._icon = tk.PhotoImage(file=resource_path("assets/milestone_logo.png"))
+                self.iconphoto(True, self._icon)
         except Exception:  # noqa: BLE001 — 아이콘 실패는 치명적이지 않음
             pass
 
