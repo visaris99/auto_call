@@ -12,11 +12,22 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~0,2%"=="\\" goto err_unc
 cd /d "%SCRIPT_DIR%"
 
+REM dotnet을 PATH에서 찾고, 없으면 기본 설치 경로에서 직접 사용
+REM (SDK 설치 직후에는 기존 창의 PATH가 갱신되지 않아 못 찾는 경우가 흔함)
+set "DOTNET=dotnet"
 where dotnet >nul 2>nul
-if errorlevel 1 goto err_dotnet
+if errorlevel 1 (
+  if exist "%ProgramFiles%\dotnet\dotnet.exe" (
+    set "DOTNET=%ProgramFiles%\dotnet\dotnet.exe"
+  ) else if exist "%LocalAppData%\Microsoft\dotnet\dotnet.exe" (
+    set "DOTNET=%LocalAppData%\Microsoft\dotnet\dotnet.exe"
+  ) else (
+    goto err_dotnet
+  )
+)
 
 echo [1/2] Publishing (self-contained, win-x64)...
-dotnet publish App -c Release -r win-x64 --self-contained true -o ..\dist_dotnet\milestone_dialer
+"%DOTNET%" publish App -c Release -r win-x64 --self-contained true -o ..\dist_dotnet\milestone_dialer
 if errorlevel 1 goto err_build
 
 echo [2/2] Copying adb...
