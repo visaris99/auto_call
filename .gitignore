@@ -7,3 +7,6 @@ dist/
 build/out/
 build/adb/
 error_log.txt
+dotnet/**/bin/
+dotnet/**/obj/
+dist_dotnet/
