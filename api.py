@@ -105,3 +105,29 @@ class ApiClient:
 
     def me(self) -> dict:
         return self._request("GET", "/me")["user"]
+
+    # ---- 리드/콜 ----
+
+    def queue(self, limit: int = 50) -> list[dict]:
+        return self._request("GET", f"/leads/queue?limit={limit}")["items"]
+
+    def reveal(self, lead_id: str, reason: str = "TM 발신") -> str:
+        """발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다."""
+        return self._request("POST", f"/leads/{lead_id}/reveal", {"reason": reason})["phone"]
+
+    def log_call(self, lead_id: str, *, result_code: str, talk_seconds: int,
+                 memo: str | None, callback_at: str | None, idempotency_key: str) -> dict:
+        body = {"resultCode": result_code, "talkSeconds": talk_seconds,
+                "memo": memo, "callbackAt": callback_at}
+        return self._request("POST", f"/leads/{lead_id}/call", body,
+                             headers={"Idempotency-Key": idempotency_key})
+
+    def save_memo(self, lead_id: str, memo: str) -> None:
+        self._request("PATCH", f"/leads/{lead_id}/memo", {"memo": memo})
+
+    def check_version(self) -> dict | None:
+        """서버 미구현(404 포함) 등 어떤 오류든 None — 버전 안내는 선택 기능."""
+        try:
+            return self._request("GET", "/version", auth=False)
+        except ApiError:
+            return None
