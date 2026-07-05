@@ -36,12 +36,16 @@
             <!-- 좌측: 콜 큐 -->
             <Border Style="{StaticResource Card}" Grid.Column="0" Margin="0,0,6,0" Padding="10">
                 <DockPanel>
-                    <DockPanel DockPanel.Dock="Top" Margin="4,2,4,8">
+                    <DockPanel DockPanel.Dock="Top" Margin="4,2,4,4">
                         <Button DockPanel.Dock="Right" Content="새로고침" Style="{StaticResource GhostBtn}"
                                 FontSize="11" Padding="8,4" Click="Refresh_Click"/>
-                        <TextBlock Text="오늘의 콜 큐" FontWeight="Bold" FontSize="13"
-                                   Foreground="{StaticResource B.Ink}" VerticalAlignment="Center"/>
+                        <TextBlock FontWeight="Bold" FontSize="13"
+                                   Foreground="{StaticResource B.Ink}" VerticalAlignment="Center">
+                            <Run Text="오늘의 콜 큐"/>
+                            <Run x:Name="QueueCountRun" Text="" Foreground="{StaticResource B.Muted}"/>
+                        </TextBlock>
                     </DockPanel>
+                    <WrapPanel x:Name="FilterPanel" DockPanel.Dock="Top" Margin="4,0,4,6"/>
                     <ListBox x:Name="QueueList" BorderThickness="0" Background="Transparent"
                              HorizontalContentAlignment="Stretch"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -111,15 +115,28 @@
                 </Border>
 
                 <Border Style="{StaticResource Card}" Padding="20,14" Margin="0,10,0,0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button x:Name="DialBtn" Content="발신 (F1)" Style="{StaticResource SuccessBtn}"
-                                Width="170" Height="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
-                        <Button x:Name="HangupBtn" Content="종료 (F2)" Style="{StaticResource DangerBtn}"
-                                Width="170" Height="50" FontSize="15" FontWeight="Bold"
-                                Margin="14,0,0,0" IsEnabled="False" Click="Hangup_Click"/>
-                        <TextBlock x:Name="TimerText" Text="00:00" FontSize="20" FontWeight="Bold"
-                                   Foreground="{StaticResource B.Ink}" MinWidth="80"
-                                   Margin="18,0,0,0" VerticalAlignment="Center" TextAlignment="Center"/>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button x:Name="DialBtn" Content="발신 (F1)" Style="{StaticResource SuccessBtn}"
+                                    Width="170" Height="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
+                            <Button x:Name="HangupBtn" Content="종료 (F2)" Style="{StaticResource DangerBtn}"
+                                    Width="170" Height="50" FontSize="15" FontWeight="Bold"
+                                    Margin="14,0,0,0" IsEnabled="False" Click="Hangup_Click"/>
+                            <TextBlock x:Name="TimerText" Text="00:00" FontSize="20" FontWeight="Bold"
+                                       Foreground="{StaticResource B.Ink}" MinWidth="80"
+                                       Margin="18,0,0,0" VerticalAlignment="Center" TextAlignment="Center"/>
+                        </StackPanel>
+                        <!-- 수동 발신: CRM 리드와 무관한 번호 직접 발신 (기록 안 됨) -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                            <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.Muted}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
+                                     MinHeight="32" Padding="10,5" FontSize="12"
+                                     ToolTip="전화번호 (숫자만) — CRM에 기록되지 않습니다"/>
+                            <Button x:Name="ManualDialBtn" Content="발신" Style="{StaticResource GhostBtn}"
+                                    Width="72" MinHeight="32" FontSize="12" Margin="8,0,0,0"
+                                    Click="ManualDial_Click"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

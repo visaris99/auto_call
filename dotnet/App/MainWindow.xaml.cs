@@ -24,7 +24,21 @@ public partial class MainWindow : Window
     private string? _selectedResult;
     private readonly HashSet<string> _notified = new();
     private readonly Dictionary<string, ToggleButton> _resultButtons = new();
+    private readonly Dictionary<string, ToggleButton> _filterChips = new();
+    private string _filter = "ALL";
+    private bool _isManualCall;
     private bool _suppressSelection;
+
+    /// <summary>큐 필터 정의: (키, 라벨, 해당 상태들).</summary>
+    private static readonly (string Key, string Label, string[] Statuses)[] Filters =
+    {
+        ("ALL", "전체", Array.Empty<string>()),
+        ("INTERESTED", "가망", new[] { "INTERESTED" }),
+        ("CALLBACK", "콜백", new[] { "CALLBACK" }),
+        ("NEW", "신규", new[] { "NEW", "ASSIGNED" }),
+        ("NOANSWER", "부재", new[] { "NOANSWER" }),
+        ("CONSULT", "상담중", new[] { "CONSULT" }),
+    };
 
     private readonly DispatcherTimer _tickTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _queueTimer = new() { Interval = TimeSpan.FromSeconds(60) };
@@ -38,7 +52,17 @@ public partial class MainWindow : Window
         _config = config;
         UserText.Text = $"{client.User?.OrgName} · {client.User?.Name}";
         BuildResultButtons();
+        BuildFilterChips();
         UpdateBanner();
+        ManualBox.TextChanged += (_, _) =>
+        {
+            string digits = new(ManualBox.Text.Where(char.IsDigit).ToArray());
+            if (digits != ManualBox.Text)
+            {
+                ManualBox.Text = digits;
+                ManualBox.CaretIndex = digits.Length;
+            }
+        };
 
         _tickTimer.Tick += (_, _) =>
         {
@@ -98,12 +122,13 @@ public partial class MainWindow : Window
     {
         try
         {
-            var items = await _client.QueueAsync();
+            var items = await _client.QueueAsync(limit: 100);  // 서버 허용 최대
             SetCrm(true);
             _leads = items;
             RenderQueue();
-            if (_current == null || _leads.All(x => x.Id != _current.Id))
-                Select(_leads.FirstOrDefault());
+            var visible = FilteredLeads();
+            if (_current == null || visible.All(x => x.Id != _current.Id))
+                Select(visible.FirstOrDefault());
         }
         catch (AuthException)
         {
@@ -115,20 +140,72 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---------- 필터 ----------
+
+    private void BuildFilterChips()
+    {
+        foreach (var (key, label, _) in Filters)
+        {
+            var chip = new ToggleButton
+            {
+                Style = (Style)FindResource("FilterChip"),
+                Content = label,
+                IsChecked = key == _filter,
+            };
+            chip.Click += (_, _) => SelectFilter(key);
+            _filterChips[key] = chip;
+            FilterPanel.Children.Add(chip);
+        }
+    }
+
+    private void SelectFilter(string key)
+    {
+        _filter = key;
+        foreach (var (k, chip) in _filterChips)
+            chip.IsChecked = k == key;
+        RenderQueue();
+        var visible = FilteredLeads();
+        if (_current == null || visible.All(x => x.Id != _current.Id))
+            Select(visible.FirstOrDefault());
+    }
+
+    private List<LeadItem> FilteredLeads()
+    {
+        var statuses = Filters.First(f => f.Key == _filter).Statuses;
+        return statuses.Length == 0
+            ? _leads
+            : _leads.Where(x => statuses.Contains(x.Status)).ToList();
+    }
+
     private void RenderQueue()
     {
         var now = DateTimeOffset.Now;
-        var rows = QueueLogic.SortQueue(_leads, now).Select(x => new LeadRow(x, now)).ToList();
+        var filtered = FilteredLeads();
+        var rows = QueueLogic.SortQueue(filtered, now).Select(x => new LeadRow(x, now)).ToList();
         _suppressSelection = true;
         QueueList.ItemsSource = rows;
         if (_current != null)
             QueueList.SelectedItem = rows.FirstOrDefault(r => r.Item.Id == _current.Id);
         _suppressSelection = false;
 
-        foreach (var row in rows.Where(r => r.Due && !_notified.Contains(r.Item.Id)))
+        QueueCountRun.Text = _filter == "ALL"
+            ? $" {_leads.Count}건"
+            : $" {filtered.Count}/{_leads.Count}건";
+        foreach (var (key, label, statuses) in Filters)
         {
-            _notified.Add(row.Item.Id);
-            FlashBanner($"재통화 시간: {row.Name} {row.TimeText}");
+            int count = statuses.Length == 0
+                ? _leads.Count
+                : _leads.Count(x => statuses.Contains(x.Status));
+            _filterChips[key].Content = $"{label} {count}";
+        }
+
+        // 콜백 도래 알림은 필터와 무관하게 전체 기준
+        foreach (var item in _leads.Where(x => QueueLogic.IsCallbackDue(x, now)
+                                               && !_notified.Contains(x.Id)))
+        {
+            _notified.Add(item.Id);
+            var dt = QueueLogic.ParseIso(item.NextCallAt);
+            FlashBanner($"재통화 시간: {item.Name} {dt?.ToLocalTime():HH:mm}");
         }
     }
 
@@ -230,8 +307,51 @@ public partial class MainWindow : Window
             _talkSeconds = (int)_callWatch.Elapsed.TotalSeconds;
             _callWatch = null;
         }
+        if (_isManualCall)
+        {
+            // 수동 발신 통화는 CRM 기록 대상이 아님 — 통화시간을 결과 저장에 넘기지 않는다
+            _isManualCall = false;
+            _talkSeconds = 0;
+            TimerText.Text = "00:00";
+        }
         HangupBtn.IsEnabled = false;
         DialBtn.IsEnabled = true;
+        ManualDialBtn.IsEnabled = true;
+    }
+
+    /// <summary>수동 발신 — CRM 리드와 무관, 콜 기록 없음.</summary>
+    private async void ManualDial_Click(object sender, RoutedEventArgs e)
+    {
+        if (_callWatch != null)
+            return;
+        string phone = ManualBox.Text.Trim();
+        if (phone.Length < 8)
+        {
+            MessageBox.Show("발신할 전화번호를 확인하세요 (숫자만, 8자리 이상).", "수동 발신",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        DialBtn.IsEnabled = false;
+        ManualDialBtn.IsEnabled = false;
+        try
+        {
+            if (!await Task.Run(AdbController.IsConnected))
+                throw new InvalidOperationException(
+                    "휴대폰이 연결되지 않았습니다.\nUSB 연결과 디버깅 허용을 확인하세요.");
+            if (!await Task.Run(() => AdbController.Call(phone)))
+                throw new InvalidOperationException("ADB 발신에 실패했습니다.");
+            _isManualCall = true;
+            _callWatch = Stopwatch.StartNew();
+            _todayDials++;
+            UpdateToday();
+            HangupBtn.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            HandleError(ex);
+            DialBtn.IsEnabled = true;
+            ManualDialBtn.IsEnabled = true;
+        }
     }
 
     // ---------- 결과 기록 ----------
@@ -285,6 +405,12 @@ public partial class MainWindow : Window
     {
         if (_current == null)
             return;
+        if (_isManualCall)
+        {
+            MessageBox.Show("수동 발신 통화 중에는 결과를 저장할 수 없습니다.\n(수동 발신은 CRM 기록 대상이 아닙니다)",
+                "수동 발신", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         if (_selectedResult == null)
         {
             MessageBox.Show("상담 결과를 먼저 선택하세요 (1~7).", "결과 선택",
@@ -329,7 +455,7 @@ public partial class MainWindow : Window
             ResetForm();
             _leads = _leads.Where(x => x.Id != lead.Id).ToList();
             RenderQueue();
-            Select(_leads.FirstOrDefault());
+            Select(FilteredLeads().FirstOrDefault());
         }
         catch (AuthException)
         {

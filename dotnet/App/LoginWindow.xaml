@@ -15,14 +15,14 @@
                            HorizontalAlignment="Center" Margin="0,8,0,2"/>
 
                 <TextBlock Text="아이디" Style="{StaticResource FieldLabel}"/>
-                <TextBox x:Name="IdBox" Style="{StaticResource Input}" Height="38"/>
+                <TextBox x:Name="IdBox" Style="{StaticResource Input}"/>
 
                 <TextBlock Text="비밀번호" Style="{StaticResource FieldLabel}"/>
-                <PasswordBox x:Name="PwBox" Style="{StaticResource InputPassword}" Height="38"/>
+                <PasswordBox x:Name="PwBox" Style="{StaticResource InputPassword}"/>
 
                 <TextBlock x:Name="MfaLabel" Text="인증앱 6자리 코드"
                            Style="{StaticResource FieldLabel}" Visibility="Collapsed"/>
-                <TextBox x:Name="MfaBox" Style="{StaticResource Input}" Height="38"
+                <TextBox x:Name="MfaBox" Style="{StaticResource Input}"
                          Visibility="Collapsed"/>
 
                 <TextBlock x:Name="ErrorText" Foreground="{StaticResource B.Danger}"
