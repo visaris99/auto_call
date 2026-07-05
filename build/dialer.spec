@@ -12,6 +12,7 @@ datas = [
     (os.path.join(ADB_DIR, "adb.exe"), "adb"),
     (os.path.join(ADB_DIR, "AdbWinApi.dll"), "adb"),
     (os.path.join(ADB_DIR, "AdbWinUsbApi.dll"), "adb"),
+    (os.path.join(ROOT, "assets"), "assets"),
 ]
 
 a = Analysis(
@@ -28,7 +29,8 @@ exe = EXE(
     a.scripts,
     a.binaries,
     a.datas,
-    name="TM다이얼러",
+    name="milestone_dialer",
     console=False,
     upx=False,
+    icon=os.path.join(ROOT, "assets", "icon.ico"),
 )

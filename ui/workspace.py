@@ -61,7 +61,7 @@ class WorkspaceFrame(ctk.CTkFrame):
                            border_width=1, border_color=COLORS["line"], height=52)
         bar.grid(row=0, column=0, columnspan=2, sticky="ew")
         user = self.client.user or {}
-        ctk.CTkLabel(bar, text=f"🏢 {user.get('orgName', '')} · {user.get('name', '')}",
+        ctk.CTkLabel(bar, text=f"{user.get('orgName', '')} · {user.get('name', '')}",
                      font=font(13, "bold"), text_color=COLORS["ink"]).pack(side="left", padx=16)
         self.today_label = ctk.CTkLabel(bar, text="오늘: 발신 0 · 가입 0",
                                         font=font(12), text_color=COLORS["gold"])
@@ -82,7 +82,7 @@ class WorkspaceFrame(ctk.CTkFrame):
         head.pack(fill="x", padx=12, pady=(12, 4))
         ctk.CTkLabel(head, text="오늘의 콜 큐", font=font(13, "bold"),
                      text_color=COLORS["ink"]).pack(side="left")
-        ctk.CTkButton(head, text="↻", width=28, height=24, font=font(12),
+        ctk.CTkButton(head, text="새로고침", width=64, height=24, font=font(11),
                       fg_color=COLORS["surface2"], text_color=COLORS["ink"],
                       hover_color=COLORS["hover"],
                       command=self.refresh_queue).pack(side="right")
@@ -104,7 +104,7 @@ class WorkspaceFrame(ctk.CTkFrame):
         self.name_label.pack(side="left")
         self.badge_slot = ctk.CTkFrame(top, fg_color="transparent")
         self.badge_slot.pack(side="left", padx=10)
-        self.phone_label = ctk.CTkLabel(card, text="📱 -", font=font(17),
+        self.phone_label = ctk.CTkLabel(card, text="-", font=font(17),
                                         text_color=COLORS["gold"])
         self.phone_label.pack(anchor="w", padx=20, pady=(6, 0))
         memo_row = ctk.CTkFrame(card, fg_color="transparent")
@@ -125,12 +125,12 @@ class WorkspaceFrame(ctk.CTkFrame):
         controls.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         inner = ctk.CTkFrame(controls, fg_color="transparent")
         inner.pack(pady=14)
-        self.dial_btn = ctk.CTkButton(inner, text="📞 발신 (F1)", width=170, height=52,
+        self.dial_btn = ctk.CTkButton(inner, text="발신 (F1)", width=170, height=52,
                                       font=font(15, "bold"), corner_radius=10,
                                       fg_color=COLORS["success"], hover_color="#14653c",
                                       command=self.dial)
         self.dial_btn.grid(row=0, column=0, padx=8)
-        self.hangup_btn = ctk.CTkButton(inner, text="⏹ 종료 (F2)", width=170, height=52,
+        self.hangup_btn = ctk.CTkButton(inner, text="종료 (F2)", width=170, height=52,
                                         font=font(15, "bold"), corner_radius=10,
                                         fg_color=COLORS["danger"], hover_color="#8f2c23",
                                         state="disabled", command=self.hangup)
@@ -157,7 +157,7 @@ class WorkspaceFrame(ctk.CTkFrame):
         self.callback_entry = ctk.CTkEntry(form, font=font(12), height=32, width=76,
                                            placeholder_text="14:30")
         # CALLBACK 선택 시에만 pack
-        self.save_btn = ctk.CTkButton(form, text="💾 저장하고 다음 (F3)", width=170,
+        self.save_btn = ctk.CTkButton(form, text="저장하고 다음 (F3)", width=170,
                                       height=36, font=font(13, "bold"), corner_radius=8,
                                       fg_color=COLORS["ink"], hover_color="#2d2a24",
                                       command=self.save_result)
@@ -217,8 +217,7 @@ class WorkspaceFrame(ctk.CTkFrame):
             row = ctk.CTkFrame(self.queue_box, fg_color=bg, corner_radius=8)
             row.pack(fill="x", pady=2, padx=2)
             name = item.get("name") or "(이름없음)"
-            prefix = "🔔 " if due else ""
-            ctk.CTkLabel(row, text=f"{prefix}{name}", font=font(13),
+            ctk.CTkLabel(row, text=name, font=font(13),
                          text_color=COLORS["ink"], anchor="w").pack(
                 side="left", padx=(10, 4), pady=6)
             Badge(row, item["status"]).pack(side="right", padx=8)
@@ -231,7 +230,7 @@ class WorkspaceFrame(ctk.CTkFrame):
             if due and item["id"] not in self._notified_callbacks:
                 self._notified_callbacks.add(item["id"])
                 Toast(self.winfo_toplevel(),
-                      f"🔔 재통화 시간: {name} ({dt.strftime('%H:%M') if dt else ''})")
+                      f"재통화 시간: {name} ({dt.strftime('%H:%M') if dt else ''})")
 
     def _select(self, item: dict | None):
         if self.call_started:
@@ -240,12 +239,12 @@ class WorkspaceFrame(ctk.CTkFrame):
         for child in self.badge_slot.winfo_children():
             child.destroy()
         if item is None:
-            self.name_label.configure(text="✅ 대기 중인 콜이 없습니다")
+            self.name_label.configure(text="대기 중인 콜이 없습니다")
             self.phone_label.configure(text="큐가 비어 있습니다 — 새 배정을 기다리세요")
             self.lead_memo_entry.delete(0, "end")
         else:
             self.name_label.configure(text=item.get("name") or "(이름없음)")
-            self.phone_label.configure(text=f"📱 {item['phoneMasked']}")
+            self.phone_label.configure(text=item["phoneMasked"])
             Badge(self.badge_slot, item["status"]).pack()
             self.lead_memo_entry.delete(0, "end")
             if item.get("memo"):
@@ -276,11 +275,11 @@ class WorkspaceFrame(ctk.CTkFrame):
         self.talk_seconds = 0
         self.today_dials += 1
         self._update_today()
-        self.dial_btn.configure(text="📞 발신 (F1)")
+        self.dial_btn.configure(text="발신 (F1)")
         self.hangup_btn.configure(state="normal")
 
     def _on_dial_error(self, exc: Exception):
-        self.dial_btn.configure(state="normal", text="📞 발신 (F1)")
+        self.dial_btn.configure(state="normal", text="발신 (F1)")
         if isinstance(exc, AuthError):
             self.on_auth_lost()
         elif isinstance(exc, NetworkError):
@@ -390,7 +389,7 @@ class WorkspaceFrame(ctk.CTkFrame):
 
     def _update_banner(self):
         n = len(self.pending.items())
-        self.banner.configure(text=f"📤 전송 대기 {n}건" if n else "")
+        self.banner.configure(text=f"전송 대기 {n}건" if n else "")
 
     def _tick(self):
         if self._destroyed:

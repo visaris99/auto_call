@@ -32,6 +32,11 @@ def format_seconds(total: int) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
+def ascii_only(text: str) -> str:
+    """출력 가능한 ASCII만 남긴다 — 아이디/비밀번호 필드의 한글 IME 입력 차단용."""
+    return "".join(ch for ch in text if 32 <= ord(ch) < 127)
+
+
 def callback_iso(hhmm: str, now: datetime) -> str | None:
     """'14:30' → 오늘(지났으면 내일)의 aware ISO 문자열. 형식 오류는 None."""
     try:

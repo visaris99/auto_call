@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
-from logic import parse_iso, is_callback_due, sort_queue, format_seconds, callback_iso
+from logic import parse_iso, is_callback_due, sort_queue, format_seconds, callback_iso, ascii_only
 
 KST = timezone(timedelta(hours=9))
 NOW = datetime(2026, 7, 5, 10, 0, tzinfo=KST)
@@ -49,3 +49,10 @@ def test_callback_iso_invalid():
     assert callback_iso("25:00", NOW) is None
     assert callback_iso("abc", NOW) is None
     assert callback_iso("", NOW) is None
+
+
+def test_ascii_only_strips_hangul_and_controls():
+    assert ascii_only("abc123!@#") == "abc123!@#"
+    assert ascii_only("pass워드123") == "pass123"
+    assert ascii_only("한글만") == ""
+    assert ascii_only("tab\there\n") == "tabhere"

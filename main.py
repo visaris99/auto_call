@@ -8,6 +8,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from api import ApiClient
+from resources import load_private_fonts, resource_path
 from state import Config, PendingCallQueue, config_dir
 from ui.login import LoginFrame
 from ui.theme import COLORS
@@ -32,6 +33,13 @@ class App(ctk.CTk):
         self.title(f"{APP_NAME} v{VERSION}")
         self.geometry("1000x680")
         self.minsize(920, 620)
+        try:
+            import tkinter as tk
+
+            self._icon = tk.PhotoImage(file=resource_path("assets/milestone_logo.png"))
+            self.iconphoto(True, self._icon)
+        except Exception:  # noqa: BLE001 — 아이콘 실패는 치명적이지 않음
+            pass
 
         self.config_data = Config.load()
         self.client = ApiClient(self.config_data.server_url)
@@ -74,6 +82,7 @@ class App(ctk.CTk):
 
 def main():
     try:
+        load_private_fonts()  # assets/fonts/*.ttf 동봉 폰트 등록 (Windows)
         App().mainloop()
     except Exception as exc:  # noqa: BLE001 — 마지막 안전망
         log_error(f"Fatal: {exc}\n{traceback.format_exc()}")

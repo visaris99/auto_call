@@ -47,7 +47,9 @@ _VARIANT_COLORS = {
     "neutral": (COLORS["surface2"], COLORS["foreground"]),
 }
 
-FONT_FAMILY = "맑은 고딕"
+# 앞에 있을수록 우선. 나눔고딕이 설치돼 있으면(또는 assets/fonts로 동봉하면) 그걸 쓴다.
+_FONT_CANDIDATES = ["나눔고딕", "NanumGothic", "맑은 고딕", "Malgun Gothic", "Noto Sans CJK KR"]
+_resolved_family: str | None = None
 
 
 def status_colors(status: str) -> tuple[str, str]:
@@ -55,8 +57,23 @@ def status_colors(status: str) -> tuple[str, str]:
     return _VARIANT_COLORS[_VARIANT.get(status, "neutral")]
 
 
+def font_family() -> str:
+    """설치된 폰트 중 후보 목록의 첫 번째를 선택 (tk 초기화 이후 1회 확정)."""
+    global _resolved_family
+    if _resolved_family is None:
+        try:
+            from tkinter import font as tkfont
+
+            installed = set(tkfont.families())
+            _resolved_family = next((f for f in _FONT_CANDIDATES if f in installed),
+                                    "Malgun Gothic")
+        except Exception:  # noqa: BLE001 — tk 미초기화 등
+            _resolved_family = "Malgun Gothic"
+    return _resolved_family
+
+
 def font(size: int, weight: str = "normal"):
     """CTkFont 팩토리 — tk 초기화 이후에만 호출할 것."""
     import customtkinter as ctk
 
-    return ctk.CTkFont(family=FONT_FAMILY, size=size, weight=weight)
+    return ctk.CTkFont(family=font_family(), size=size, weight=weight)

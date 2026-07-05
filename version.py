@@ -1,2 +1,2 @@
-APP_NAME = "TM 다이얼러"
+APP_NAME = "Milestone Dialer"
 VERSION = "2.0.0"
