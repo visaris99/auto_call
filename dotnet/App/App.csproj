@@ -4,6 +4,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>  <!-- NotifyIcon(트레이 알림) 용 -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>milestone_dialer</AssemblyName>
     <RootNamespace>MilestoneDialer</RootNamespace>
@@ -17,8 +18,16 @@
     <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>
 
+  <!-- WinForms 암시적 using이 WPF 타입(Brush/Application)과 충돌하므로 제거 -->
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="..\..\assets\milestone_logo.png" Link="assets\milestone_logo.png"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\icon.ico" Link="assets\icon.ico"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

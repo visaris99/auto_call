@@ -13,6 +13,12 @@
                 BorderBrush="{StaticResource B.Line}" BorderThickness="0,0,0,1" Padding="16,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock x:Name="UpdateLink" FontSize="11" VerticalAlignment="Center"
+                               Margin="0,0,14,0" Visibility="Collapsed">
+                        <Hyperlink Click="UpdateLink_Click" Foreground="{StaticResource B.Gold}">
+                            <Run x:Name="UpdateLinkRun" Text="새 버전 받기"/>
+                        </Hyperlink>
+                    </TextBlock>
                     <TextBlock x:Name="BannerText" FontSize="11" Foreground="{StaticResource B.Danger}"
                                VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <TextBlock x:Name="AdbDot" Text="● ADB" FontSize="12"
@@ -111,6 +117,16 @@
                                    Foreground="{StaticResource B.Gold}" Margin="0,6,0,0"/>
                         <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <!-- 상담 이력 (서버 API 배포 후 자동 표시) -->
+                        <ItemsControl x:Name="HistoryList" Margin="0,8,0,0" MaxHeight="88">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontSize="11"
+                                               Foreground="{StaticResource B.Muted}"
+                                               TextTrimming="CharacterEllipsis" Margin="0,1"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 
@@ -125,6 +141,11 @@
                             <TextBlock x:Name="TimerText" Text="00:00" FontSize="20" FontWeight="Bold"
                                        Foreground="{StaticResource B.Ink}" MinWidth="80"
                                        Margin="18,0,0,0" VerticalAlignment="Center" TextAlignment="Center"/>
+                            <CheckBox x:Name="AutoDialCheck" Content="연속 발신" FontSize="12"
+                                      Foreground="{StaticResource B.Foreground}"
+                                      Margin="16,0,0,0" VerticalAlignment="Center"
+                                      ToolTip="결과 저장 후 3초 뒤 다음 리드에 자동 발신 (ESC로 중단)"
+                                      Checked="AutoDial_Toggled" Unchecked="AutoDial_Toggled"/>
                         </StackPanel>
                         <!-- 수동 발신: CRM 리드와 무관한 번호 직접 발신 (기록 안 됨) -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">

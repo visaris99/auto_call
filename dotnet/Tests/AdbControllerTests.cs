@@ -13,6 +13,9 @@ public class AdbControllerTests : IDisposable
         if [ "$1" = "devices" ]; then
           printf 'List of devices attached\n%s' "$TM_ADB_DEVICES"
         fi
+        if [ "$2" = "dumpsys" ]; then
+          printf '%s' "$TM_ADB_DUMPSYS"
+        fi
         exit ${TM_ADB_EXIT:-0}
         """;
 
@@ -33,7 +36,8 @@ public class AdbControllerTests : IDisposable
 
     public void Dispose()
     {
-        foreach (string name in new[] { "TM_ADB", "TM_ADB_LOG", "TM_ADB_DEVICES", "TM_ADB_EXIT" })
+        foreach (string name in new[]
+                 { "TM_ADB", "TM_ADB_LOG", "TM_ADB_DEVICES", "TM_ADB_EXIT", "TM_ADB_DUMPSYS" })
             Environment.SetEnvironmentVariable(name, null);
         Directory.Delete(_dir, recursive: true);
     }
@@ -78,5 +82,27 @@ public class AdbControllerTests : IDisposable
     {
         Environment.SetEnvironmentVariable("TM_ADB_DEVICES", "");
         Assert.False(AdbController.IsConnected());
+    }
+
+    [Fact]
+    public void GetCallState_ReturnsMaxState_AcrossSims()
+    {
+        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS",
+            "mCallState=0\nsomething\nmCallState=2\n");
+        Assert.Equal(2, AdbController.GetCallState());
+    }
+
+    [Fact]
+    public void GetCallState_Idle()
+    {
+        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS", "mCallState=0\n");
+        Assert.Equal(0, AdbController.GetCallState());
+    }
+
+    [Fact]
+    public void GetCallState_Null_WhenUnparsable()
+    {
+        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS", "no call state here");
+        Assert.Null(AdbController.GetCallState());
     }
 }

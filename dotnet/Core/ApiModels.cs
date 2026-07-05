@@ -27,3 +27,16 @@ public sealed record CallLead(string Id, string Status, string? NextCallAt);
 public sealed record CallResponse(bool Ok, CallLead Lead);
 
 public sealed record VersionInfo(string? MinVersion, string? LatestVersion, string? DownloadUrl);
+
+public sealed record CallHistoryItem(
+    string ResultCode,
+    string? Memo,
+    int TalkSeconds,
+    string? CalledAt,
+    string? CallbackAt);
+
+public sealed record TodayStats(
+    string? Date,
+    int Dials,
+    int TalkSeconds,
+    Dictionary<string, int>? ByResult);

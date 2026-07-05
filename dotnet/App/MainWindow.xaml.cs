@@ -28,6 +28,14 @@ public partial class MainWindow : Window
     private string _filter = "ALL";
     private bool _isManualCall;
     private bool _suppressSelection;
+    private bool _sawOffhook;            // 통화 종료 자동 감지: 통화중(2) 관측 후 0이면 종료
+    private bool _pollingCallState;
+    private bool _serverStats;           // /me/today 사용 가능 여부
+    private int _historyToken;
+    private int _autoDialCountdown;
+    private string? _downloadUrl;
+    private System.Windows.Forms.NotifyIcon? _tray;
+    private readonly DispatcherTimer _autoDialTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     /// <summary>큐 필터 정의: (키, 라벨, 해당 상태들).</summary>
     private static readonly (string Key, string Label, string[] Statuses)[] Filters =
@@ -64,10 +72,28 @@ public partial class MainWindow : Window
             }
         };
 
-        _tickTimer.Tick += (_, _) =>
+        AutoDialCheck.IsChecked = config.AutoDial;
+        _autoDialTimer.Tick += AutoDialTimer_Tick;
+        try
+        {
+            _tray = new System.Windows.Forms.NotifyIcon
+            {
+                Icon = new System.Drawing.Icon(
+                    System.IO.Path.Combine(AppContext.BaseDirectory, "assets", "icon.ico")),
+                Visible = true,
+                Text = "Milestone Dialer",
+            };
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or ArgumentException)
+        {
+            // 트레이 아이콘 실패는 무시 — 알림만 못 쓸 뿐
+        }
+
+        _tickTimer.Tick += async (_, _) =>
         {
             if (_callWatch != null)
                 TimerText.Text = QueueLogic.FormatSeconds((int)_callWatch.Elapsed.TotalSeconds);
+            await PollCallStateAsync();
         };
         _queueTimer.Tick += async (_, _) => await RefreshQueueAsync();
         _adbTimer.Tick += async (_, _) => SetAdb(await Task.Run(AdbController.IsConnected));
@@ -79,20 +105,133 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _tickTimer.Stop(); _queueTimer.Stop(); _adbTimer.Stop(); _flushTimer.Stop();
+            _autoDialTimer.Stop();
+            _tray?.Dispose();
         };
 
         Loaded += async (_, _) =>
         {
             await RefreshQueueAsync();
+            await RefreshTodayAsync();
             SetAdb(await Task.Run(AdbController.IsConnected));
             await CheckVersionAsync();
         };
     }
 
+    // ---------- 통화 종료 자동 감지 ----------
+
+    private async Task PollCallStateAsync()
+    {
+        if (_callWatch == null || _pollingCallState)
+            return;
+        _pollingCallState = true;
+        try
+        {
+            int? state = await Task.Run(AdbController.GetCallState);
+            if (_callWatch == null || state == null)
+                return;
+            if (state >= 1)
+            {
+                _sawOffhook = true;
+            }
+            else if (_sawOffhook)
+            {
+                EndCall();
+                FlashBanner("통화 종료 감지 — 결과를 선택하세요");
+            }
+        }
+        finally
+        {
+            _pollingCallState = false;
+        }
+    }
+
+    // ---------- 연속 발신 ----------
+
+    private void AutoDial_Toggled(object sender, RoutedEventArgs e)
+    {
+        _config.AutoDial = AutoDialCheck.IsChecked == true;
+        _config.Save();
+        if (!_config.AutoDial)
+            CancelAutoDial();
+    }
+
+    private void MaybeAutoDial()
+    {
+        if (AutoDialCheck.IsChecked != true || _current == null
+            || _callWatch != null || _autoDialTimer.IsEnabled)
+            return;
+        _autoDialCountdown = 3;
+        BannerText.Text = $"{_autoDialCountdown}초 후 자동 발신 — ESC로 중단";
+        _autoDialTimer.Start();
+    }
+
+    private void AutoDialTimer_Tick(object? sender, EventArgs e)
+    {
+        _autoDialCountdown--;
+        if (_autoDialCountdown > 0)
+        {
+            BannerText.Text = $"{_autoDialCountdown}초 후 자동 발신 — ESC로 중단";
+            return;
+        }
+        _autoDialTimer.Stop();
+        UpdateBanner();
+        Dial_Click(this, new RoutedEventArgs());
+    }
+
+    private void CancelAutoDial()
+    {
+        if (!_autoDialTimer.IsEnabled)
+            return;
+        _autoDialTimer.Stop();
+        UpdateBanner();
+    }
+
+    // ---------- 알림 ----------
+
+    private void Notify(string title, string message)
+    {
+        try
+        {
+            _tray?.ShowBalloonTip(5000, title, message, System.Windows.Forms.ToolTipIcon.Info);
+            System.Media.SystemSounds.Exclamation.Play();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            // 알림 실패는 무시
+        }
+    }
+
     // ---------- 상단 표시 ----------
 
-    private void UpdateToday() =>
-        TodayText.Text = $"오늘: 발신 {_todayDials} · 가입 {_todayWon}";
+    private void UpdateToday()
+    {
+        if (!_serverStats)
+            TodayText.Text = $"오늘: 발신 {_todayDials} · 가입 {_todayWon}";
+    }
+
+    /// <summary>서버 집계(/me/today) — 미구현이면 세션 카운터 유지.</summary>
+    private async Task RefreshTodayAsync()
+    {
+        try
+        {
+            var stats = await _client.TodayAsync();
+            if (stats == null)
+                return;
+            _serverStats = true;
+            int won = stats.ByResult?.GetValueOrDefault("WON") ?? 0;
+            TodayText.Text = $"오늘: 발신 {stats.Dials} · 가입 {won}"
+                             + $" · 통화 {QueueLogic.FormatSeconds(stats.TalkSeconds)}";
+        }
+        catch (AuthException)
+        {
+            OnAuthLost();
+        }
+        catch (ApiException)
+        {
+            // 일시 오류 — 다음 갱신에서 재시도
+        }
+    }
 
     private void UpdateBanner()
     {
@@ -199,13 +338,15 @@ public partial class MainWindow : Window
             _filterChips[key].Content = $"{label} {count}";
         }
 
-        // 콜백 도래 알림은 필터와 무관하게 전체 기준
+        // 콜백 도래 알림은 필터와 무관하게 전체 기준 — 배너 + Windows 알림
         foreach (var item in _leads.Where(x => QueueLogic.IsCallbackDue(x, now)
                                                && !_notified.Contains(x.Id)))
         {
             _notified.Add(item.Id);
             var dt = QueueLogic.ParseIso(item.NextCallAt);
-            FlashBanner($"재통화 시간: {item.Name} {dt?.ToLocalTime():HH:mm}");
+            string message = $"재통화 시간: {item.Name} {dt?.ToLocalTime():HH:mm}";
+            FlashBanner(message);
+            Notify("재통화 알림", message);
         }
     }
 
@@ -229,12 +370,15 @@ public partial class MainWindow : Window
     private void Select(LeadItem? item)
     {
         _current = item;
+        CancelAutoDial();
         if (item == null)
         {
             NameText.Text = "대기 중인 콜이 없습니다";
             PhoneText.Text = "큐가 비어 있습니다 — 새 배정을 기다리세요";
             LeadMemoText.Text = "";
             StatusBadge.Visibility = Visibility.Collapsed;
+            HistoryList.ItemsSource = null;
+            _historyToken++;
         }
         else
         {
@@ -246,7 +390,13 @@ public partial class MainWindow : Window
             StatusBadgeText.Text = Ui.LabelFor(item.Status);
             StatusBadge.Visibility = Visibility.Visible;
             LeadMemoText.Text = string.IsNullOrEmpty(item.Memo) ? "" : $"리드 메모: {item.Memo}";
+            LoadHistory(item);
         }
+        UpdateSelectionInList(item);
+    }
+
+    private void UpdateSelectionInList(LeadItem? item)
+    {
         if (QueueList.ItemsSource is List<LeadRow> rows)
         {
             _suppressSelection = true;
@@ -254,6 +404,30 @@ public partial class MainWindow : Window
                 ? null
                 : rows.FirstOrDefault(r => r.Item.Id == item.Id);
             _suppressSelection = false;
+        }
+    }
+
+    /// <summary>선택 리드의 상담 이력 로드 — 서버 미구현(404)이면 조용히 숨김.</summary>
+    private async void LoadHistory(LeadItem item)
+    {
+        int token = ++_historyToken;
+        HistoryList.ItemsSource = null;
+        try
+        {
+            var items = await _client.HistoryAsync(item.Id, 5);
+            if (token != _historyToken || items == null)
+                return;
+            HistoryList.ItemsSource = items.Select(h =>
+            {
+                var dt = QueueLogic.ParseIso(h.CalledAt);
+                string when = dt?.ToLocalTime().ToString("MM-dd HH:mm") ?? "";
+                string memo = string.IsNullOrEmpty(h.Memo) ? "" : $" · {h.Memo}";
+                return $"{when} · {Ui.LabelFor(h.ResultCode)}{memo}";
+            }).ToList();
+        }
+        catch (ApiException)
+        {
+            // 이력 로드 실패는 무시 — 표시만 생략
         }
     }
 
@@ -275,6 +449,7 @@ public partial class MainWindow : Window
             string phone = await _client.RevealAsync(lead.Id);  // 평문은 이 지점에서만
             if (!await Task.Run(() => AdbController.Call(phone)))
                 throw new InvalidOperationException("ADB 발신에 실패했습니다.");
+            _sawOffhook = false;
             _callWatch = Stopwatch.StartNew();
             _talkSeconds = 0;
             _todayDials++;
@@ -314,6 +489,7 @@ public partial class MainWindow : Window
             _talkSeconds = 0;
             TimerText.Text = "00:00";
         }
+        _sawOffhook = false;
         HangupBtn.IsEnabled = false;
         DialBtn.IsEnabled = true;
         ManualDialBtn.IsEnabled = true;
@@ -324,6 +500,7 @@ public partial class MainWindow : Window
     {
         if (_callWatch != null)
             return;
+        CancelAutoDial();
         string phone = ManualBox.Text.Trim();
         if (phone.Length < 8)
         {
@@ -341,6 +518,7 @@ public partial class MainWindow : Window
             if (!await Task.Run(() => AdbController.Call(phone)))
                 throw new InvalidOperationException("ADB 발신에 실패했습니다.");
             _isManualCall = true;
+            _sawOffhook = false;
             _callWatch = Stopwatch.StartNew();
             _todayDials++;
             UpdateToday();
@@ -445,6 +623,8 @@ public partial class MainWindow : Window
             UpdateToday();
             ResetForm();
             await RefreshQueueAsync();
+            await RefreshTodayAsync();
+            MaybeAutoDial();
         }
         catch (NetworkException)
         {
@@ -530,15 +710,39 @@ public partial class MainWindow : Window
     private async Task CheckVersionAsync()
     {
         var info = await _client.CheckVersionAsync();
-        if (info?.MinVersion is not { Length: > 0 } min)
+        if (info == null || !System.Version.TryParse(Ui.Version, out var mine))
             return;
-        if (System.Version.TryParse(Ui.Version, out var mine)
-            && System.Version.TryParse(min, out var required) && mine < required)
+        _downloadUrl = info.DownloadUrl;
+        if (System.Version.TryParse(info.MinVersion, out var required) && mine < required)
         {
             MessageBox.Show(
                 $"이 버전({Ui.Version})은 더 이상 지원되지 않습니다.\n" +
                 $"관리자에게 새 버전을 요청하세요. (최신: {info.LatestVersion})",
                 "업데이트 필요", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        if (System.Version.TryParse(info.LatestVersion, out var latest) && mine < latest)
+        {
+            UpdateLinkRun.Text = $"새 버전 v{info.LatestVersion} 받기";
+            UpdateLink.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void UpdateLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_downloadUrl))
+        {
+            MessageBox.Show("다운로드 주소가 등록되지 않았습니다.\n관리자에게 새 버전을 요청하세요.",
+                "업데이트", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo(_downloadUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            MessageBox.Show($"브라우저를 열 수 없습니다.\n{_downloadUrl}", "업데이트",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -546,6 +750,10 @@ public partial class MainWindow : Window
     {
         switch (e.Key)
         {
+            case Key.Escape:
+                CancelAutoDial();
+                e.Handled = true;
+                return;
             case Key.F1:
                 Dial_Click(this, new RoutedEventArgs());
                 e.Handled = true;

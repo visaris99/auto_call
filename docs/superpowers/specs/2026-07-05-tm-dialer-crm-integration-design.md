@@ -150,6 +150,31 @@
 - `leads.memo`(리드 단위 메모, 칸반 노출) 갱신. 본인 배정만. 권한 `lead:update`.
 - **2026-07-05 변경**: 리드 메모는 관리자만 관리하기로 결정 — 다이얼러는 이 엔드포인트를 더 이상 호출하지 않고 리드 메모를 읽기 전용으로 표시만 한다. 서버는 엔드포인트를 유지해도 무방하나, 웹 칸반의 메모 수정 권한을 관리자급으로 좁히는 작업은 서버(Codex) 몫.
 
+#### `GET /leads/{id}/history?limit=10` — 리드 상담 이력 (2026-07-05 추가)
+
+응답 200 (calledAt 내림차순, limit 기본 10·최대 50):
+
+```json
+{ "items": [ { "resultCode": "CALLBACK", "memo": "다음주 재상담",
+               "talkSeconds": 154, "calledAt": "2026-07-03T14:20:00+09:00",
+               "callbackAt": "2026-07-06T14:30:00+09:00" } ] }
+```
+
+- 본인 배정 리드만 (아니면 `404 NOT_FOUND` — 존재 여부 은닉). 권한 `lead:read`. 원천 `call_logs`.
+- 다이얼러는 이 엔드포인트가 404(미구현)면 이력 표시를 조용히 숨긴다.
+
+#### `GET /me/today` — 오늘 내 실적 (2026-07-05 추가)
+
+응답 200 (세션 사용자의 KST 오늘 `call_logs` 집계):
+
+```json
+{ "date": "2026-07-05", "dials": 47, "talkSeconds": 5820,
+  "byResult": { "NOANSWER": 20, "CALLBACK": 5, "INTERESTED": 8,
+                "CONSULT": 3, "WON": 2, "REJECT": 7, "DNC": 2 } }
+```
+
+- 권한 `lead:read`. 다이얼러는 404(미구현)면 세션 카운터로 폴백.
+
 #### `GET /version` (무인증, 선택 구현)
 
 응답 200: `{ "minVersion": "2.0.0", "latestVersion": "2.0.0", "downloadUrl": null }`

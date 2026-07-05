@@ -153,6 +153,35 @@ public sealed class ApiClient
         return data!.Value.Deserialize<CallResponse>(Json)!;
     }
 
+    /// <summary>리드 상담 이력. 서버 미구현/본인 리드 아님(404)이면 null.</summary>
+    public async Task<List<CallHistoryItem>?> HistoryAsync(string leadId, int limit = 10)
+    {
+        try
+        {
+            var data = await RequestAsync(HttpMethod.Get, $"/leads/{leadId}/history?limit={limit}")
+                .ConfigureAwait(false);
+            return data!.Value.GetProperty("items").Deserialize<List<CallHistoryItem>>(Json);
+        }
+        catch (ApiException ex) when (ex.HttpStatus == 404)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>오늘 내 실적 집계. 서버 미구현(404)이면 null — 세션 카운터로 폴백.</summary>
+    public async Task<TodayStats?> TodayAsync()
+    {
+        try
+        {
+            var data = await RequestAsync(HttpMethod.Get, "/me/today").ConfigureAwait(false);
+            return data!.Value.Deserialize<TodayStats>(Json);
+        }
+        catch (ApiException ex) when (ex.HttpStatus == 404)
+        {
+            return null;
+        }
+    }
+
     /// <summary>서버 미구현(404 포함) 등 어떤 오류든 null — 버전 안내는 선택 기능.</summary>
     public async Task<VersionInfo?> CheckVersionAsync()
     {

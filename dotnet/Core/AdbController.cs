@@ -67,4 +67,21 @@ public static class AdbController
         return r.Stdout.Split('\n').Skip(1)
             .Any(line => line.Trim().EndsWith("device", StringComparison.Ordinal));
     }
+
+    /// <summary>통화 상태: 0=대기, 1=수신중, 2=통화중(발신 포함). 확인 불가면 null.
+    /// 멀티심 단말은 mCallState가 여러 줄 — 가장 큰 값을 취한다.</summary>
+    public static int? GetCallState()
+    {
+        var result = Run(new[] { "shell", "dumpsys", "telephony.registry" }, timeoutMs: 5_000);
+        if (result is not { ExitCode: 0 } r)
+            return null;
+        int? best = null;
+        foreach (System.Text.RegularExpressions.Match m in
+                 System.Text.RegularExpressions.Regex.Matches(r.Stdout, @"mCallState=(\d)"))
+        {
+            int value = m.Groups[1].Value[0] - '0';
+            best = best is null ? value : Math.Max(best.Value, value);
+        }
+        return best;
+    }
 }

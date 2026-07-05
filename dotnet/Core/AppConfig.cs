@@ -20,6 +20,9 @@ public sealed class AppConfig
     [JsonPropertyName("last_login_id")]
     public string LastLoginId { get; set; } = "";
 
+    [JsonPropertyName("auto_dial")]
+    public bool AutoDial { get; set; }
+
     public static string ConfigDir()
     {
         string baseDir = OperatingSystem.IsWindows()
