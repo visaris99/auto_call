@@ -1,0 +1,40 @@
+<Window x:Class="MilestoneDialer.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Milestone Dialer" Height="660" Width="480"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource B.Background}"
+        FontFamily="{StaticResource AppFont}">
+    <Grid>
+        <Border Style="{StaticResource Card}" Width="348" Padding="40,28"
+                VerticalAlignment="Center" HorizontalAlignment="Center">
+            <StackPanel>
+                <Image x:Name="LogoImage" Width="160" Height="160" HorizontalAlignment="Center"/>
+                <TextBlock Text="CRM 계정으로 로그인하세요" FontSize="12"
+                           Foreground="{StaticResource B.Muted}"
+                           HorizontalAlignment="Center" Margin="0,8,0,2"/>
+
+                <TextBlock Text="아이디" Style="{StaticResource FieldLabel}"/>
+                <TextBox x:Name="IdBox" Style="{StaticResource Input}" Height="38"/>
+
+                <TextBlock Text="비밀번호" Style="{StaticResource FieldLabel}"/>
+                <PasswordBox x:Name="PwBox" Style="{StaticResource InputPassword}" Height="38"/>
+
+                <TextBlock x:Name="MfaLabel" Text="인증앱 6자리 코드"
+                           Style="{StaticResource FieldLabel}" Visibility="Collapsed"/>
+                <TextBox x:Name="MfaBox" Style="{StaticResource Input}" Height="38"
+                         Visibility="Collapsed"/>
+
+                <TextBlock x:Name="ErrorText" Foreground="{StaticResource B.Danger}"
+                           FontSize="12" TextWrapping="Wrap" MinHeight="18" Margin="0,10,0,0"/>
+
+                <Button x:Name="SubmitBtn" Content="로그인" Style="{StaticResource PrimaryBtn}"
+                        Height="42" FontSize="14" FontWeight="Bold" Margin="0,8,0,6"
+                        Click="Submit_Click"/>
+                <Button Content="서버 주소 설정" Style="{StaticResource GhostBtn}"
+                        Background="Transparent" Foreground="{StaticResource B.Muted}"
+                        Height="28" FontSize="11" Click="ServerSettings_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -16,6 +16,9 @@ public partial class App : Application
                 "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
+        var login = new LoginWindow();
+        MainWindow = login;
+        login.Show();
     }
 
     public static void LogError(string message)
