@@ -8,20 +8,35 @@ import customtkinter as ctk
 from ui.theme import COLORS, RESULTS, STATUS_LABEL, font, status_colors
 
 
-def run_bg(widget, work, on_success=None, on_error=None):
-    """work()를 데몬 스레드에서 실행하고 결과를 widget.after로 UI 스레드에 전달."""
+def run_bg(widget, work, on_success=None, on_error=None, poll_ms=50):
+    """work()를 데몬 스레드에서 실행하고 결과를 UI 스레드 콜백으로 전달.
+
+    tkinter는 다른 스레드에서 widget.after 호출이 안전하지 않으므로,
+    워커는 dict에만 결과를 쓰고 UI 스레드가 after 폴링으로 회수한다.
+    (run_bg 자체는 반드시 UI 스레드에서 호출할 것)
+    """
+    outcome: dict = {}
 
     def runner():
         try:
-            result = work()
+            outcome["result"] = work()
         except Exception as exc:  # noqa: BLE001 — UI 콜백으로 전달
-            if on_error:
-                widget.after(0, lambda: on_error(exc))
-        else:
-            if on_success:
-                widget.after(0, lambda: on_success(result))
+            outcome["error"] = exc
 
-    threading.Thread(target=runner, daemon=True).start()
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+
+    def poll():
+        if thread.is_alive():
+            widget.after(poll_ms, poll)
+            return
+        if "error" in outcome:
+            if on_error:
+                on_error(outcome["error"])
+        elif on_success:
+            on_success(outcome.get("result"))
+
+    widget.after(poll_ms, poll)
 
 
 class Badge(ctk.CTkLabel):

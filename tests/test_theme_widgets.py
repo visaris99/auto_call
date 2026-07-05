@@ -30,10 +30,10 @@ def test_crm_variant_mapping():
 
 
 class DummyWidget:
-    """tk 없이 after만 흉내 — 콜백을 즉시 실행."""
+    """tk 없이 after만 흉내 — 지연 후 타이머 스레드에서 실행."""
 
-    def after(self, _delay, fn):
-        fn()
+    def after(self, delay, fn):
+        threading.Timer(max(delay, 1) / 1000, fn).start()
 
 
 def test_run_bg_success_and_error():
