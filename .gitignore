@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+my_env/
+.venv/
+dist/
+build/out/
+build/adb/
+error_log.txt
