@@ -1,65 +1,95 @@
 @echo off
-chcp 65001 >nul
-REM TM 다이얼러 Windows 빌드. 사전 준비:
-REM   1) Python 3.12+ 설치 (설치 시 "Add python.exe to PATH" + py 런처 포함)
-REM   2) build\adb\ 에 adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll 복사
+setlocal
+REM ============================================================
+REM  TM Dialer - Windows build script
+REM  Prerequisites:
+REM    1) Python 3.12+ installed (python.org, check "Add to PATH")
+REM    2) Copy adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll
+REM       into the build\adb\ folder
+REM  NOTE: Run this from a LOCAL drive (C:\...), not from \\wsl$
+REM ============================================================
 
-REM ── \\wsl$ 같은 네트워크 경로에서는 빌드 불가 → 로컬 디스크로 클론 안내
-echo %~dp0 | findstr /b /c:"\\\\" >nul
-if not errorlevel 1 (
-  echo [오류] 네트워크 경로(\\wsl$ 등)에서는 빌드할 수 없습니다.
-  echo        C: 드라이브 등 로컬 폴더에 git clone 한 뒤 다시 실행하세요.
-  echo        예) git clone https://github.com/visaris99/auto_call C:\work\auto_call
-  pause
-  exit /b 1
-)
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~0,2%"=="\\" goto err_unc
 
-cd /d %~dp0..
+cd /d "%SCRIPT_DIR%.."
+if errorlevel 1 goto err_cd
 
-REM ── Python 확인
 where py >nul 2>nul
-if errorlevel 1 (
-  echo [오류] Python이 설치되어 있지 않습니다 ('py' 런처를 찾을 수 없음^).
-  echo        https://www.python.org/downloads/ 에서 설치 후 다시 실행하세요.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto err_python
 
-REM ── adb 동봉 파일 확인
-if not exist build\adb\adb.exe (
-  echo [오류] build\adb\ 에 adb.exe와 DLL 2종을 먼저 복사하세요.
-  echo        https://developer.android.com/tools/releases/platform-tools 에서 받아
-  echo        adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll 3개를 build\adb\ 에 넣으면 됩니다.
-  pause
-  exit /b 1
-)
+if not exist "build\adb\adb.exe" goto err_adb
+if not exist "build\adb\AdbWinApi.dll" goto err_adb
+if not exist "build\adb\AdbWinUsbApi.dll" goto err_adb
 
-echo [1/3] 가상환경 준비...
-if not exist .venv (py -3 -m venv .venv)
-call .venv\Scripts\activate.bat
-if errorlevel 1 (
-  echo [오류] 가상환경 활성화 실패. .venv 폴더를 지우고 다시 실행해보세요.
-  pause
-  exit /b 1
-)
+echo [1/3] Preparing virtualenv...
+if not exist ".venv" py -3 -m venv .venv
+if not exist ".venv\Scripts\activate.bat" goto err_venv
+call ".venv\Scripts\activate.bat"
 
-echo [2/3] 패키지 설치...
+echo [2/3] Installing packages...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt pyinstaller
-if errorlevel 1 (
-  echo [오류] 패키지 설치 실패. 인터넷 연결을 확인하세요.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto err_pip
 
-echo [3/3] exe 빌드...
+echo [3/3] Building exe...
 pyinstaller build\dialer.spec --noconfirm --distpath dist --workpath build\out
-if errorlevel 1 (
-  echo [오류] 빌드 실패. 위 오류 메시지를 확인하세요.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto err_build
 
 echo.
-echo [완료] dist\TM다이얼러.exe 가 생성되었습니다.
+echo [OK] Done! The exe file is in the "dist" folder.
 pause
+exit /b 0
+
+:err_unc
+echo.
+echo [ERROR] This script cannot run from a network path (\\wsl$ / \\wsl.localhost).
+echo Copy the project to a local drive first. Two easy options:
+echo   A) git clone https://github.com/visaris99/auto_call C:\work\auto_call
+echo   B) GitHub - green "Code" button - "Download ZIP" - extract to C:\work
+echo Then run build\build.bat from there.
+pause
+exit /b 1
+
+:err_cd
+echo.
+echo [ERROR] Could not change to the project folder.
+pause
+exit /b 1
+
+:err_python
+echo.
+echo [ERROR] Python not found (the "py" launcher is missing).
+echo Install Python from https://www.python.org/downloads/
+echo (check "Add python.exe to PATH" during install), then run again.
+pause
+exit /b 1
+
+:err_adb
+echo.
+echo [ERROR] Missing adb files in build\adb\
+echo Download platform-tools:
+echo   https://developer.android.com/tools/releases/platform-tools
+echo Extract and copy these 3 files into build\adb\ :
+echo   adb.exe  AdbWinApi.dll  AdbWinUsbApi.dll
+pause
+exit /b 1
+
+:err_venv
+echo.
+echo [ERROR] Failed to create the virtualenv (.venv).
+echo Delete the .venv folder and run again.
+pause
+exit /b 1
+
+:err_pip
+echo.
+echo [ERROR] Package install failed. Check your internet connection.
+pause
+exit /b 1
+
+:err_build
+echo.
+echo [ERROR] PyInstaller build failed. See the messages above.
+pause
+exit /b 1
