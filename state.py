@@ -54,3 +54,50 @@ class Config:
         path = path or (config_dir() / "config.json")
         _atomic_write_json(path, {"server_url": self.server_url,
                                   "last_login_id": self.last_login_id})
+
+
+from api import ApiError, AuthError, NetworkError, NightBlocked  # noqa: E402
+
+
+class PendingCallQueue:
+    """전송 실패한 콜 기록의 재전송 큐. ★평문 전화번호는 절대 저장하지 않는다."""
+
+    def __init__(self, path: Path | None = None):
+        self.path = path or (config_dir() / "pending_calls.json")
+        loaded = _read_json(self.path, [])
+        self._items: list[dict] = loaded if isinstance(loaded, list) else []
+
+    def _save(self) -> None:
+        _atomic_write_json(self.path, self._items)
+
+    def add(self, *, idempotency_key: str, lead_id: str, payload: dict) -> None:
+        self._items.append({"idempotency_key": idempotency_key,
+                            "lead_id": lead_id, "payload": payload})
+        self._save()
+
+    def items(self) -> list[dict]:
+        return list(self._items)
+
+    def remove(self, idempotency_key: str) -> None:
+        self._items = [x for x in self._items if x["idempotency_key"] != idempotency_key]
+        self._save()
+
+    def flush(self, client) -> tuple[int, int]:
+        """(성공 수, 잔여 수). NetworkError/NightBlocked→중단(다음에 재시도),
+        AuthError→re-raise(재로그인 필요), 그 외 ApiError→해당 건 폐기(재시도 무의미)."""
+        sent = 0
+        for entry in self.items():
+            try:
+                client.log_call(entry["lead_id"],
+                                idempotency_key=entry["idempotency_key"],
+                                **entry["payload"])
+            except (NetworkError, NightBlocked):
+                break
+            except AuthError:
+                raise
+            except ApiError:
+                self.remove(entry["idempotency_key"])
+                continue
+            self.remove(entry["idempotency_key"])
+            sent += 1
+        return sent, len(self._items)
