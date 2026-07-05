@@ -10,3 +10,20 @@ public sealed record UserInfo(
     bool MustChangePassword);
 
 public sealed record LoginResponse(string Token, string? ExpiresAt, UserInfo User);
+
+public sealed record LeadItem(
+    string Id,
+    string? Name,
+    string PhoneMasked,
+    string Status,
+    string? NextCallAt,
+    string? Memo,
+    string? UpdatedAt);
+
+public sealed record QueueResponse(string? ServerTime, List<LeadItem> Items);
+
+public sealed record CallLead(string Id, string Status, string? NextCallAt);
+
+public sealed record CallResponse(bool Ok, CallLead Lead);
+
+public sealed record VersionInfo(string? MinVersion, string? LatestVersion, string? DownloadUrl);

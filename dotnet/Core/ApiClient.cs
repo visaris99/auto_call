@@ -125,4 +125,46 @@ public sealed class ApiClient
         var data = await RequestAsync(HttpMethod.Get, "/me").ConfigureAwait(false);
         return data!.Value.GetProperty("user").Deserialize<UserInfo>(Json)!;
     }
+
+    // ---- 리드/콜 ----
+
+    public async Task<List<LeadItem>> QueueAsync(int limit = 50)
+    {
+        var data = await RequestAsync(HttpMethod.Get, $"/leads/queue?limit={limit}")
+            .ConfigureAwait(false);
+        return data!.Value.Deserialize<QueueResponse>(Json)!.Items;
+    }
+
+    /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.</summary>
+    public async Task<string> RevealAsync(string leadId, string reason = "TM 발신")
+    {
+        var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/reveal",
+            new { reason }).ConfigureAwait(false);
+        return data!.Value.GetProperty("phone").GetString()!;
+    }
+
+    public async Task<CallResponse> LogCallAsync(string leadId, string resultCode,
+        int talkSeconds, string? memo, string? callbackAt, string idempotencyKey)
+    {
+        var body = new { resultCode, talkSeconds, memo, callbackAt };
+        var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/call", body,
+            new Dictionary<string, string> { ["Idempotency-Key"] = idempotencyKey })
+            .ConfigureAwait(false);
+        return data!.Value.Deserialize<CallResponse>(Json)!;
+    }
+
+    /// <summary>서버 미구현(404 포함) 등 어떤 오류든 null — 버전 안내는 선택 기능.</summary>
+    public async Task<VersionInfo?> CheckVersionAsync()
+    {
+        try
+        {
+            var data = await RequestAsync(HttpMethod.Get, "/version", auth: false)
+                .ConfigureAwait(false);
+            return data!.Value.Deserialize<VersionInfo>(Json);
+        }
+        catch (ApiException)
+        {
+            return null;
+        }
+    }
 }
