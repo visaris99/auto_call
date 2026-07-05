@@ -1,5 +1,5 @@
 """GUI 수동 테스트용 가짜 CRM. 사용: my_env/bin/python scripts/dev_mock_crm.py
-로그인: hong / 1234. 서버 주소: http://127.0.0.1:3002 (TM_SERVER_URL 기본값과 동일)."""
+로그인: hong / 1234. 앱 실행 시 TM_SERVER_URL=http://127.0.0.1:3002 로 지정할 것."""
 import sys
 from pathlib import Path
 

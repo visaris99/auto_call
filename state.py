@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-DEFAULT_SERVER_URL = "http://localhost:3002"  # 배포 전 실제 CRM 주소로 교체
+DEFAULT_SERVER_URL = "https://crm.milestone-sales.xyz"  # 운영 CRM (개발 시 TM_SERVER_URL로 덮어씀)
 
 
 def config_dir() -> Path:
