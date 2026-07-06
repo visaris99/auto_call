@@ -307,7 +307,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var items = await _client.QueueAsync(limit: 100);  // 서버 허용 최대
+            var items = await _client.QueueAsync(limit: 500);  // 서버 허용 최대(500)
             SetCrm(true);
             _leads = items;
             RenderQueue();
