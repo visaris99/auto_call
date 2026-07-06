@@ -44,7 +44,8 @@ Name: "{userdesktop}\마일스톤 다이얼러"; Filename: "{app}\milestone_dial
 Name: "{userprograms}\마일스톤 다이얼러"; Filename: "{app}\milestone_dialer.exe"
 
 [Run]
-Filename: "{app}\milestone_dialer.exe"; Description: "설치 후 바로 실행"; Flags: nowait postinstall skipifsilent
+; skipifsilent를 빼서 자동 업데이트(무음 설치) 후에도 앱이 자동 재실행되게 한다
+Filename: "{app}\milestone_dialer.exe"; Description: "설치 후 바로 실행"; Flags: nowait postinstall
 
 ; 참고: 로그인 설정(%APPDATA%\MilestoneDialer\config.json)과 재전송 큐는
 ; 프로그램 제거 시에도 남긴다(재설치 시 서버주소·아이디 유지).
