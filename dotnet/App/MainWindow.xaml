@@ -113,8 +113,13 @@
                                 <TextBlock x:Name="StatusBadgeText" FontSize="11" FontWeight="Bold"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock x:Name="PhoneText" Text="-" FontSize="17"
-                                   Foreground="{StaticResource B.Gold}" Margin="0,6,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock x:Name="PhoneText" Text="-" FontSize="17"
+                                       Foreground="{StaticResource B.Gold}" VerticalAlignment="Center"/>
+                            <Button x:Name="CopyPhoneBtn" Content="번호 복사" Style="{StaticResource GhostBtn}"
+                                    Width="86" MinHeight="30" FontSize="12" Margin="10,0,0,0"
+                                    IsEnabled="False" Click="CopyLeadPhone_Click"/>
+                        </StackPanel>
                         <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
                         <!-- 상담 이력 (서버 API 배포 후 자동 표시) -->

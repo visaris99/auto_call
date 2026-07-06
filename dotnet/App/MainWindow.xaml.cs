@@ -421,12 +421,14 @@ public partial class MainWindow : Window
             LeadMemoText.Text = "";
             StatusBadge.Visibility = Visibility.Collapsed;
             HistoryList.ItemsSource = null;
+            CopyPhoneBtn.IsEnabled = false;
             _historyToken++;
         }
         else
         {
             NameText.Text = string.IsNullOrEmpty(item.Name) ? "(이름없음)" : item.Name;
             PhoneText.Text = item.PhoneMasked;
+            CopyPhoneBtn.IsEnabled = true;
             var (bg, fg) = Ui.StatusColors(item.Status);
             StatusBadge.Background = bg;
             StatusBadgeText.Foreground = fg;
@@ -436,6 +438,35 @@ public partial class MainWindow : Window
             LoadHistory(item);
         }
         UpdateSelectionInList(item);
+    }
+
+    private async void CopyLeadPhone_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null)
+            return;
+        var lead = _current;
+        CopyPhoneBtn.IsEnabled = false;
+        CopyPhoneBtn.Content = "복사 중…";
+        try
+        {
+            string phone = await _client.RevealAsync(lead.Id, "TM 번호 복사");
+            Clipboard.SetText(phone);
+            FlashBanner("선택 리드 번호를 복사했습니다");
+        }
+        catch (Exception ex) when (ex is ExternalException or COMException)
+        {
+            MessageBox.Show("클립보드에 번호를 복사할 수 없습니다. 다시 시도하세요.", "번호 복사",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            HandleError(ex);
+        }
+        finally
+        {
+            CopyPhoneBtn.Content = "번호 복사";
+            CopyPhoneBtn.IsEnabled = _current != null;
+        }
     }
 
     private void UpdateSelectionInList(LeadItem? item)
