@@ -6,7 +6,7 @@ namespace MilestoneDialer;
 
 public static class Ui
 {
-    public const string Version = "2.3.0";
+    public const string Version = "2.3.1";
 
     private static readonly Dictionary<string, Brush> Cache = new();
 

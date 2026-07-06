@@ -67,4 +67,19 @@ public static class QueueLogic
                 sb.Append(ch);
         return sb.ToString();
     }
+
+    /// <summary>붙여넣은 전화번호에서 숫자만 추출하고, +82/0082 한국 국가번호는 0으로 정규화한다.</summary>
+    public static string PhoneDigits(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (char ch in text)
+            if (char.IsDigit(ch))
+                sb.Append(ch);
+        string digits = sb.ToString();
+        if (digits.StartsWith("0082", StringComparison.Ordinal) && digits.Length > 4)
+            return "0" + digits[4..];
+        if (digits.StartsWith("82", StringComparison.Ordinal) && digits.Length > 2)
+            return "0" + digits[2..];
+        return digits;
+    }
 }

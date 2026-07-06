@@ -1,5 +1,6 @@
 // 콜 워크스페이스 — 파이썬 ui/workspace.py와 동일 의미론.
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private bool _sawOffhook;            // 통화 종료 자동 감지: 통화중(2) 관측 후 0이면 종료
     private bool _pollingCallState;
     private bool _serverStats;           // /me/today 사용 가능 여부
+    private bool _normalizingManualPhone;
     private int _historyToken;
     private int _autoDialCountdown;
     private string? _downloadUrl;
@@ -70,15 +72,9 @@ public partial class MainWindow : Window
         BuildResultButtons();
         BuildFilterChips();
         UpdateBanner();
-        ManualBox.TextChanged += (_, _) =>
-        {
-            string digits = new(ManualBox.Text.Where(char.IsDigit).ToArray());
-            if (digits != ManualBox.Text)
-            {
-                ManualBox.Text = digits;
-                ManualBox.CaretIndex = digits.Length;
-            }
-        };
+        ManualBox.TextChanged += ManualBox_TextChanged;
+        ManualBox.PreviewKeyDown += ManualBox_PreviewKeyDown;
+        DataObject.AddPastingHandler(ManualBox, ManualBox_Pasting);
 
         AutoDialCheck.IsChecked = config.AutoDial;
         _autoDialTimer.Tick += AutoDialTimer_Tick;
@@ -548,7 +544,8 @@ public partial class MainWindow : Window
         if (_callWatch != null)
             return;
         CancelAutoDial();
-        string phone = ManualBox.Text.Trim();
+        string phone = QueueLogic.PhoneDigits(ManualBox.Text);
+        SetManualPhone(phone);
         if (phone.Length < 8)
         {
             MessageBox.Show("발신할 전화번호를 확인하세요 (숫자만, 8자리 이상).", "수동 발신",
@@ -577,6 +574,74 @@ public partial class MainWindow : Window
             DialBtn.IsEnabled = true;
             ManualDialBtn.IsEnabled = true;
         }
+    }
+
+    private void ManualPaste_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!Clipboard.ContainsText())
+            {
+                MessageBox.Show("클립보드에 붙여넣을 전화번호가 없습니다.", "번호 붙여넣기",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string phone = QueueLogic.PhoneDigits(Clipboard.GetText());
+            if (phone.Length == 0)
+            {
+                MessageBox.Show("클립보드에서 전화번호 숫자를 찾지 못했습니다.", "번호 붙여넣기",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            SetManualPhone(phone);
+            ManualBox.Focus();
+            ManualBox.SelectAll();
+            FlashBanner("번호를 붙여넣었습니다 — Enter 또는 발신 버튼으로 발신");
+        }
+        catch (Exception ex) when (ex is ExternalException or COMException)
+        {
+            MessageBox.Show("클립보드를 읽을 수 없습니다. 다시 시도하세요.", "번호 붙여넣기",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void ManualBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_normalizingManualPhone)
+            return;
+        string phone = QueueLogic.PhoneDigits(ManualBox.Text);
+        if (phone != ManualBox.Text)
+            SetManualPhone(phone);
+    }
+
+    private void ManualBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        ManualDial_Click(this, new RoutedEventArgs());
+        e.Handled = true;
+    }
+
+    private void ManualBox_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.Text))
+            return;
+        string raw = e.DataObject.GetData(DataFormats.Text) as string ?? "";
+        string phone = QueueLogic.PhoneDigits(raw);
+        if (phone.Length == 0)
+        {
+            e.CancelCommand();
+            return;
+        }
+        e.DataObject = new DataObject(DataFormats.Text, phone);
+    }
+
+    private void SetManualPhone(string phone)
+    {
+        _normalizingManualPhone = true;
+        ManualBox.Text = phone;
+        ManualBox.CaretIndex = phone.Length;
+        _normalizingManualPhone = false;
     }
 
     // ---------- 결과 기록 ----------

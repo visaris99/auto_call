@@ -153,7 +153,10 @@
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
                                      MinHeight="32" FontSize="12"
-                                     ToolTip="전화번호 (숫자만) — CRM에 기록되지 않습니다"/>
+                                     ToolTip="전화번호 붙여넣기 가능 (하이픈·공백·+82 자동 정리) — CRM에 기록되지 않습니다"/>
+                            <Button x:Name="ManualPasteBtn" Content="붙여넣기" Style="{StaticResource GhostBtn}"
+                                    Width="86" MinHeight="32" FontSize="12" Margin="8,0,0,0"
+                                    Click="ManualPaste_Click"/>
                             <Button x:Name="ManualDialBtn" Content="발신" Style="{StaticResource GhostBtn}"
                                     Width="72" MinHeight="32" FontSize="12" Margin="8,0,0,0"
                                     Click="ManualDial_Click"/>

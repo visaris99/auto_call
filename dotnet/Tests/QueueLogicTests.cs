@@ -84,4 +84,15 @@ public class QueueLogicTests
         Assert.Equal("", QueueLogic.AsciiOnly("한글만"));
         Assert.Equal("tabhere", QueueLogic.AsciiOnly("tab\there\n"));
     }
+
+    [Theory]
+    [InlineData("010-1234-5678", "01012345678")]
+    [InlineData("전화: 010 9999 0000", "01099990000")]
+    [InlineData("+82 10-1234-5678", "01012345678")]
+    [InlineData("0082-10-1234-5678", "01012345678")]
+    [InlineData("02-123-4567", "021234567")]
+    public void PhoneDigits_NormalizesPastedPhoneNumbers(string raw, string expected)
+    {
+        Assert.Equal(expected, QueueLogic.PhoneDigits(raw));
+    }
 }

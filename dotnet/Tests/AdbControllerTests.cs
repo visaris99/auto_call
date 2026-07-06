@@ -7,39 +7,80 @@ namespace Tests;
 [Collection("adb-env")]
 public class AdbControllerTests : IDisposable
 {
-    private const string FakeAdb = """
+    private const string FakeAdbSh = """
         #!/bin/sh
         echo "$@" >> "$TM_ADB_LOG"
         if [ "$1" = "devices" ]; then
-          printf 'List of devices attached\n%s' "$TM_ADB_DEVICES"
+          printf 'List of devices attached\n'
+          cat "$TM_ADB_DEVICES_FILE"
         fi
         if [ "$2" = "dumpsys" ]; then
-          printf '%s' "$TM_ADB_DUMPSYS"
+          cat "$TM_ADB_DUMPSYS_FILE"
         fi
         exit ${TM_ADB_EXIT:-0}
         """;
 
+    private const string FakeAdbCmd = """
+        @echo off
+        >> "%TM_ADB_LOG%" echo %*
+        if "%1"=="devices" (
+          echo List of devices attached
+          if exist "%TM_ADB_DEVICES_FILE%" type "%TM_ADB_DEVICES_FILE%"
+        )
+        if "%2"=="dumpsys" (
+          if exist "%TM_ADB_DUMPSYS_FILE%" type "%TM_ADB_DUMPSYS_FILE%"
+        )
+        if defined TM_ADB_EXIT exit /b %TM_ADB_EXIT%
+        exit /b 0
+        """;
+
     private readonly string _dir = Directory.CreateTempSubdirectory("adbtest").FullName;
     private string LogPath => Path.Combine(_dir, "calls.log");
+    private string DevicesPath => Path.Combine(_dir, "devices.txt");
+    private string DumpsysPath => Path.Combine(_dir, "dumpsys.txt");
 
     public AdbControllerTests()
     {
-        string script = Path.Combine(_dir, "fakeadb.sh");
-        File.WriteAllText(script, FakeAdb);
-        File.SetUnixFileMode(script,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        string script;
+        if (OperatingSystem.IsWindows())
+        {
+            script = Path.Combine(_dir, "fakeadb.cmd");
+            File.WriteAllText(script, FakeAdbCmd);
+        }
+        else
+        {
+            script = Path.Combine(_dir, "fakeadb.sh");
+            File.WriteAllText(script, FakeAdbSh);
+            File.SetUnixFileMode(script,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
         Environment.SetEnvironmentVariable("TM_ADB", script);
         Environment.SetEnvironmentVariable("TM_ADB_LOG", LogPath);
-        Environment.SetEnvironmentVariable("TM_ADB_DEVICES", "R3CN123\tdevice\n");
+        Environment.SetEnvironmentVariable("TM_ADB_DEVICES_FILE", DevicesPath);
+        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS_FILE", DumpsysPath);
+        SetDevices("R3CN123\tdevice\n");
+        SetDumpsys("");
         Environment.SetEnvironmentVariable("TM_ADB_EXIT", null);
     }
 
     public void Dispose()
     {
         foreach (string name in new[]
-                 { "TM_ADB", "TM_ADB_LOG", "TM_ADB_DEVICES", "TM_ADB_EXIT", "TM_ADB_DUMPSYS" })
+                 { "TM_ADB", "TM_ADB_LOG", "TM_ADB_DEVICES", "TM_ADB_DEVICES_FILE", "TM_ADB_EXIT", "TM_ADB_DUMPSYS", "TM_ADB_DUMPSYS_FILE" })
             Environment.SetEnvironmentVariable(name, null);
         Directory.Delete(_dir, recursive: true);
+    }
+
+    private void SetDevices(string value)
+    {
+        Environment.SetEnvironmentVariable("TM_ADB_DEVICES", value);
+        File.WriteAllText(DevicesPath, value);
+    }
+
+    private void SetDumpsys(string value)
+    {
+        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS", value);
+        File.WriteAllText(DumpsysPath, value);
     }
 
     [Fact]
@@ -80,29 +121,28 @@ public class AdbControllerTests : IDisposable
     [Fact]
     public void IsConnected_False_WhenNoDevices()
     {
-        Environment.SetEnvironmentVariable("TM_ADB_DEVICES", "");
+        SetDevices("");
         Assert.False(AdbController.IsConnected());
     }
 
     [Fact]
     public void GetCallState_ReturnsMaxState_AcrossSims()
     {
-        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS",
-            "mCallState=0\nsomething\nmCallState=2\n");
+        SetDumpsys("mCallState=0\nsomething\nmCallState=2\n");
         Assert.Equal(2, AdbController.GetCallState());
     }
 
     [Fact]
     public void GetCallState_Idle()
     {
-        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS", "mCallState=0\n");
+        SetDumpsys("mCallState=0\n");
         Assert.Equal(0, AdbController.GetCallState());
     }
 
     [Fact]
     public void GetCallState_Null_WhenUnparsable()
     {
-        Environment.SetEnvironmentVariable("TM_ADB_DUMPSYS", "no call state here");
+        SetDumpsys("no call state here");
         Assert.Null(AdbController.GetCallState());
     }
 }
