@@ -23,6 +23,9 @@ public sealed class AppConfig
     [JsonPropertyName("auto_dial")]
     public bool AutoDial { get; set; }
 
+    [JsonPropertyName("device_code")]
+    public string DeviceCode { get; set; } = "";
+
     public static string ConfigDir()
     {
         string baseDir = OperatingSystem.IsWindows()
@@ -46,6 +49,18 @@ public sealed class AppConfig
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
             config = new AppConfig();
+        }
+        if (string.IsNullOrWhiteSpace(config.DeviceCode))
+        {
+            config.DeviceCode = $"pc-{Guid.NewGuid():N}";
+            try
+            {
+                AtomicWrite(path, JsonSerializer.Serialize(config, Json));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // 설정 파일 저장 실패는 치명적이지 않다. 현재 세션에서는 생성값을 사용한다.
+            }
         }
         string? env = Environment.GetEnvironmentVariable("TM_SERVER_URL");
         if (!string.IsNullOrEmpty(env))

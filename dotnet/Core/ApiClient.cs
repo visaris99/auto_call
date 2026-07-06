@@ -144,13 +144,29 @@ public sealed class ApiClient
     }
 
     public async Task<CallResponse> LogCallAsync(string leadId, string resultCode,
-        int talkSeconds, string? memo, string? callbackAt, string idempotencyKey)
+        int talkSeconds, string? memo, string? callbackAt, string idempotencyKey,
+        string? appointmentAt = null)
     {
-        var body = new { resultCode, talkSeconds, memo, callbackAt };
+        var body = new Dictionary<string, object?>
+        {
+            ["resultCode"] = resultCode,
+            ["talkSeconds"] = talkSeconds,
+            ["memo"] = memo,
+            ["callbackAt"] = callbackAt,
+        };
+        if (appointmentAt != null || resultCode == "APPOINTMENT")
+            body["appointmentAt"] = appointmentAt;
         var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/call", body,
             new Dictionary<string, string> { ["Idempotency-Key"] = idempotencyKey })
             .ConfigureAwait(false);
         return data!.Value.Deserialize<CallResponse>(Json)!;
+    }
+
+    public async Task HeartbeatAsync(string deviceCode, string clientVersion,
+        bool adbConnected, string? lastError)
+    {
+        await RequestAsync(HttpMethod.Post, "/devices/heartbeat",
+            new { deviceCode, clientVersion, adbConnected, lastError }).ConfigureAwait(false);
     }
 
     /// <summary>리드 상담 이력. 서버 미구현/본인 리드 아님(404)이면 null.</summary>

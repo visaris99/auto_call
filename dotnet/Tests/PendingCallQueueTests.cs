@@ -43,6 +43,17 @@ public class PendingCallQueueTests : IDisposable
     }
 
     [Fact]
+    public void Add_PersistsAppointmentAt()
+    {
+        var q = new PendingCallQueue(QueuePath);
+        q.Add(new PendingCall("k-appt", "L1", "APPOINTMENT", 30, null, null,
+            "2026-07-06T11:00:00+09:00"));
+        var item = Assert.Single(new PendingCallQueue(QueuePath).Items);
+        Assert.Equal("APPOINTMENT", item.ResultCode);
+        Assert.Equal("2026-07-06T11:00:00+09:00", item.AppointmentAt);
+    }
+
+    [Fact]
     public async Task Flush_Success_RemovesAndCounts()
     {
         var q = MakeQueue(2);

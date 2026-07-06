@@ -34,6 +34,10 @@ public partial class MainWindow : Window
     private int _historyToken;
     private int _autoDialCountdown;
     private string? _downloadUrl;
+    private bool _adbConnected;
+    private bool _sendingHeartbeat;
+    private bool _authLost;
+    private string? _lastError;
     private System.Windows.Forms.NotifyIcon? _tray;
     private readonly DispatcherTimer _autoDialTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
@@ -48,10 +52,14 @@ public partial class MainWindow : Window
         ("CONSULT", "상담중", new[] { "CONSULT" }),
     };
 
+    private static bool IsSecondaryResult(string code) =>
+        code is "APPOINTMENT" or "HANDOFF" or "RISK" or "INVALID_NUMBER";
+
     private readonly DispatcherTimer _tickTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _queueTimer = new() { Interval = TimeSpan.FromSeconds(60) };
     private readonly DispatcherTimer _adbTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private readonly DispatcherTimer _heartbeatTimer = new() { Interval = TimeSpan.FromSeconds(60) };
 
     public MainWindow(ApiClient client, AppConfig config)
     {
@@ -98,13 +106,16 @@ public partial class MainWindow : Window
         _queueTimer.Tick += async (_, _) => await RefreshQueueAsync();
         _adbTimer.Tick += async (_, _) => SetAdb(await Task.Run(AdbController.IsConnected));
         _flushTimer.Tick += async (_, _) => await FlushPendingAsync();
+        _heartbeatTimer.Tick += async (_, _) => await SendHeartbeatAsync();
         _tickTimer.Start();
         _queueTimer.Start();
         _adbTimer.Start();
         _flushTimer.Start();
+        _heartbeatTimer.Start();
         Closed += (_, _) =>
         {
             _tickTimer.Stop(); _queueTimer.Stop(); _adbTimer.Stop(); _flushTimer.Stop();
+            _heartbeatTimer.Stop();
             _autoDialTimer.Stop();
             _tray?.Dispose();
         };
@@ -114,6 +125,7 @@ public partial class MainWindow : Window
             await RefreshQueueAsync();
             await RefreshTodayAsync();
             SetAdb(await Task.Run(AdbController.IsConnected));
+            await SendHeartbeatAsync();
             await CheckVersionAsync();
         };
     }
@@ -227,8 +239,9 @@ public partial class MainWindow : Window
         {
             OnAuthLost();
         }
-        catch (ApiException)
+        catch (ApiException ex)
         {
+            _lastError = ex.Message;
             // 일시 오류 — 다음 갱신에서 재시도
         }
     }
@@ -242,8 +255,41 @@ public partial class MainWindow : Window
     private void SetCrm(bool ok) =>
         CrmDot.Foreground = Ui.Brush(ok ? "#1A7F4B" : "#B3372C");
 
-    private void SetAdb(bool ok) =>
+    private void SetAdb(bool ok)
+    {
+        _adbConnected = ok;
         AdbDot.Foreground = Ui.Brush(ok ? "#1A7F4B" : "#B3372C");
+    }
+
+    private async Task SendHeartbeatAsync()
+    {
+        if (_sendingHeartbeat)
+            return;
+        _sendingHeartbeat = true;
+        string? lastError = _lastError;
+        try
+        {
+            await _client.HeartbeatAsync(_config.DeviceCode, Ui.Version, _adbConnected, lastError);
+            _lastError = null;
+        }
+        catch (AuthException)
+        {
+            OnAuthLost();
+        }
+        catch (NetworkException ex)
+        {
+            _lastError = ex.Message;
+            SetCrm(false);
+        }
+        catch (ApiException ex)
+        {
+            _lastError = ex.Message;
+        }
+        finally
+        {
+            _sendingHeartbeat = false;
+        }
+    }
 
     private async void FlashBanner(string message)
     {
@@ -273,8 +319,9 @@ public partial class MainWindow : Window
         {
             OnAuthLost();
         }
-        catch (ApiException)
+        catch (ApiException ex)
         {
+            _lastError = ex.Message;
             SetCrm(false);
         }
     }
@@ -549,13 +596,16 @@ public partial class MainWindow : Window
                 Margin = new Thickness(3, 0, 3, 0),
                 Content = new TextBlock
                 {
-                    Text = $"{label}\n({key})",
+                    Text = string.IsNullOrEmpty(key) ? label : $"{label}\n({key})",
                     TextAlignment = TextAlignment.Center,
                 },
             };
             btn.Click += (_, _) => SelectResult(code);
             _resultButtons[code] = btn;
-            ResultPanel.Children.Add(btn);
+            if (IsSecondaryResult(code))
+                SecondaryResultPanel.Children.Add(btn);
+            else
+                PrimaryResultPanel.Children.Add(btn);
         }
     }
 
@@ -564,7 +614,11 @@ public partial class MainWindow : Window
         _selectedResult = code;
         foreach (var (c, b) in _resultButtons)
             b.IsChecked = c == code;
-        CallbackBox.Visibility = code == "CALLBACK" ? Visibility.Visible : Visibility.Collapsed;
+        bool needsTime = code is "CALLBACK" or "APPOINTMENT";
+        CallbackBox.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
+        CallbackBox.ToolTip = code == "APPOINTMENT"
+            ? "예약 시간 (예: 14:30)"
+            : "콜백 시간 (예: 14:30)";
     }
 
     private void ResetForm()
@@ -591,17 +645,28 @@ public partial class MainWindow : Window
         }
         if (_selectedResult == null)
         {
-            MessageBox.Show("상담 결과를 먼저 선택하세요 (1~7).", "결과 선택",
+            MessageBox.Show("상담 결과를 먼저 선택하세요.", "결과 선택",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         string? callbackAt = null;
+        string? appointmentAt = null;
         if (_selectedResult == "CALLBACK")
         {
-            callbackAt = QueueLogic.CallbackIso(CallbackBox.Text, DateTimeOffset.Now);
+            callbackAt = QueueLogic.LocalTimeIso(CallbackBox.Text, DateTimeOffset.Now);
             if (callbackAt == null)
             {
                 MessageBox.Show("콜백 시간을 HH:MM 형식으로 입력하세요 (예: 14:30).", "시간 형식",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+        }
+        if (_selectedResult == "APPOINTMENT")
+        {
+            appointmentAt = QueueLogic.LocalTimeIso(CallbackBox.Text, DateTimeOffset.Now);
+            if (appointmentAt == null)
+            {
+                MessageBox.Show("예약 시간을 HH:MM 형식으로 입력하세요 (예: 14:30).", "시간 형식",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -612,12 +677,13 @@ public partial class MainWindow : Window
         var lead = _current;
         string code = _selectedResult;
         var payload = new PendingCall(Guid.NewGuid().ToString(), lead.Id, code, _talkSeconds,
-            string.IsNullOrWhiteSpace(MemoBox.Text) ? null : MemoBox.Text.Trim(), callbackAt);
+            string.IsNullOrWhiteSpace(MemoBox.Text) ? null : MemoBox.Text.Trim(), callbackAt,
+            appointmentAt);
         SaveBtn.IsEnabled = false;
         try
         {
             await _client.LogCallAsync(payload.LeadId, payload.ResultCode, payload.TalkSeconds,
-                payload.Memo, payload.CallbackAt, payload.IdempotencyKey);
+                payload.Memo, payload.CallbackAt, payload.IdempotencyKey, payload.AppointmentAt);
             if (code == "WON")
                 _todayWon++;
             UpdateToday();
@@ -665,8 +731,9 @@ public partial class MainWindow : Window
         {
             OnAuthLost();
         }
-        catch (ApiException)
+        catch (ApiException ex)
         {
+            _lastError = ex.Message;
             // 다음 주기에 재시도
         }
     }
@@ -675,6 +742,7 @@ public partial class MainWindow : Window
 
     private void HandleError(Exception ex)
     {
+        _lastError = ex.Message;
         switch (ex)
         {
             case AuthException:
@@ -699,6 +767,9 @@ public partial class MainWindow : Window
 
     private void OnAuthLost()
     {
+        if (_authLost)
+            return;
+        _authLost = true;
         MessageBox.Show("세션이 만료되었습니다. 다시 로그인해주세요.", "세션 만료",
             MessageBoxButton.OK, MessageBoxImage.Information);
         var login = new LoginWindow();
@@ -767,16 +838,18 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
         }
-        // 숫자키 1~7 — 입력창에 타이핑 중일 때는 가로채지 않는다
+        // 숫자키 1~9/0 — 입력창에 타이핑 중일 때는 가로채지 않는다
         if (Keyboard.FocusedElement is TextBox or PasswordBox)
             return;
         int index = e.Key switch
         {
-            >= Key.D1 and <= Key.D7 => e.Key - Key.D1,
-            >= Key.NumPad1 and <= Key.NumPad7 => e.Key - Key.NumPad1,
+            >= Key.D1 and <= Key.D9 => e.Key - Key.D1,
+            Key.D0 => 9,
+            >= Key.NumPad1 and <= Key.NumPad9 => e.Key - Key.NumPad1,
+            Key.NumPad0 => 9,
             _ => -1,
         };
-        if (index >= 0)
+        if (index >= 0 && index < Ui.Results.Length)
         {
             SelectResult(Ui.Results[index].Code);
             e.Handled = true;

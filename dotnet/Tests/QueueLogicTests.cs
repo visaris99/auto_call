@@ -65,6 +65,7 @@ public class QueueLogicTests
     {
         Assert.Equal("2026-07-05T14:30:00+09:00", QueueLogic.CallbackIso("14:30", Now));
         Assert.Equal("2026-07-06T09:00:00+09:00", QueueLogic.CallbackIso("09:00", Now)); // 지난 시각 → 내일
+        Assert.Equal("2026-07-05T14:30:00+09:00", QueueLogic.LocalTimeIso("14:30", Now));
     }
 
     [Fact]

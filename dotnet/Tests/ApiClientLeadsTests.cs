@@ -73,6 +73,24 @@ public class ApiClientLeadsTests
         Assert.Equal(154, body.Value.GetProperty("talkSeconds").GetInt32());
         Assert.Equal("재상담 원함", body.Value.GetProperty("memo").GetString());
         Assert.Equal("2026-07-06T14:30:00+09:00", body.Value.GetProperty("callbackAt").GetString());
+        Assert.False(body.Value.TryGetProperty("appointmentAt", out var ignored));
+    }
+
+    [Fact]
+    public async Task LogCall_SendsAppointmentAt()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/leads/L1/call", 200, new
+        {
+            ok = true,
+            lead = new { id = "L1", status = "APPOINTMENT", nextCallAt = (string?)null },
+        });
+        await client.LogCallAsync("L1", "APPOINTMENT", 90, null, null, "key-appt",
+            "2026-07-06T11:00:00+09:00");
+        var body = crm.Last.Body!.Value;
+        Assert.Equal("APPOINTMENT", body.GetProperty("resultCode").GetString());
+        Assert.Equal("2026-07-06T11:00:00+09:00", body.GetProperty("appointmentAt").GetString());
     }
 
     [Fact]
@@ -103,5 +121,21 @@ public class ApiClientLeadsTests
             new { minVersion = "2.0.0", latestVersion = "2.1.0", downloadUrl = (string?)null });
         var info = await client.CheckVersionAsync();
         Assert.Equal("2.1.0", info!.LatestVersion);
+    }
+
+    [Fact]
+    public async Task Heartbeat_SendsDeviceStatus()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/devices/heartbeat", 204, null);
+        await client.HeartbeatAsync("pc-abc", "2.2.0", adbConnected: true, lastError: "last");
+        var (_, path, headers, body) = crm.Last;
+        Assert.Equal("/api/v1/devices/heartbeat", path);
+        Assert.Equal("Bearer tok1", headers["Authorization"]);
+        Assert.Equal("pc-abc", body!.Value.GetProperty("deviceCode").GetString());
+        Assert.Equal("2.2.0", body.Value.GetProperty("clientVersion").GetString());
+        Assert.True(body.Value.GetProperty("adbConnected").GetBoolean());
+        Assert.Equal("last", body.Value.GetProperty("lastError").GetString());
     }
 }

@@ -40,7 +40,7 @@ public static class QueueLogic
     }
 
     /// <summary>'14:30' → 오늘(지났으면 내일)의 ISO 문자열. 형식 오류는 null.</summary>
-    public static string? CallbackIso(string hhmm, DateTimeOffset now)
+    public static string? LocalTimeIso(string hhmm, DateTimeOffset now)
     {
         var parts = hhmm.Trim().Split(':');
         if (parts.Length != 2
@@ -54,6 +54,9 @@ public static class QueueLogic
             target = target.AddDays(1);
         return target.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
     }
+
+    public static string? CallbackIso(string hhmm, DateTimeOffset now) =>
+        LocalTimeIso(hhmm, now);
 
     /// <summary>출력 가능한 ASCII만 남긴다 — 비밀번호/MFA 필드의 한글 IME 입력 차단용.</summary>
     public static string AsciiOnly(string text)

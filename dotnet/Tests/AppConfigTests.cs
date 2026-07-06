@@ -22,6 +22,7 @@ public class AppConfigTests : IDisposable
         var loaded = AppConfig.Load(path);
         Assert.Equal("http://crm:3002", loaded.ServerUrl);
         Assert.Equal("hong", loaded.LastLoginId);
+        Assert.False(string.IsNullOrWhiteSpace(loaded.DeviceCode));
     }
 
     [Fact]
@@ -31,6 +32,7 @@ public class AppConfigTests : IDisposable
         var loaded = AppConfig.Load(Path.Combine(_dir, "none.json"));
         Assert.Equal(AppConfig.DefaultServerUrl, loaded.ServerUrl);
         Assert.Equal("", loaded.LastLoginId);
+        Assert.StartsWith("pc-", loaded.DeviceCode);
     }
 
     [Fact]
@@ -40,6 +42,8 @@ public class AppConfigTests : IDisposable
         new AppConfig { ServerUrl = "http://saved:1" }.Save(path);
         Environment.SetEnvironmentVariable("TM_SERVER_URL", "http://env:2");
         Assert.Equal("http://env:2", AppConfig.Load(path).ServerUrl);
+        Environment.SetEnvironmentVariable("TM_SERVER_URL", null);
+        Assert.Equal("http://saved:1", AppConfig.Load(path).ServerUrl);
     }
 
     [Fact]

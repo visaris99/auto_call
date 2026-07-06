@@ -11,7 +11,8 @@ public sealed record PendingCall(
     [property: JsonPropertyName("result_code")] string ResultCode,
     [property: JsonPropertyName("talk_seconds")] int TalkSeconds,
     [property: JsonPropertyName("memo")] string? Memo,
-    [property: JsonPropertyName("callback_at")] string? CallbackAt);
+    [property: JsonPropertyName("callback_at")] string? CallbackAt,
+    [property: JsonPropertyName("appointment_at")] string? AppointmentAt = null);
 
 public sealed class PendingCallQueue
 {
@@ -94,5 +95,6 @@ public sealed class PendingCallQueue
     /// <summary>ApiClient로 전송하는 편의 오버로드.</summary>
     public Task<(int Sent, int Remaining)> FlushAsync(ApiClient client) =>
         FlushAsync(entry => client.LogCallAsync(entry.LeadId, entry.ResultCode,
-            entry.TalkSeconds, entry.Memo, entry.CallbackAt, entry.IdempotencyKey));
+            entry.TalkSeconds, entry.Memo, entry.CallbackAt, entry.IdempotencyKey,
+            entry.AppointmentAt));
 }
