@@ -152,7 +152,7 @@
                             <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.Muted}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
-                                     MinHeight="32" Padding="10,5" FontSize="12"
+                                     MinHeight="32" FontSize="12"
                                      ToolTip="전화번호 (숫자만) — CRM에 기록되지 않습니다"/>
                             <Button x:Name="ManualDialBtn" Content="발신" Style="{StaticResource GhostBtn}"
                                     Width="72" MinHeight="32" FontSize="12" Margin="8,0,0,0"
@@ -173,10 +173,10 @@
                                     Style="{StaticResource PrimaryBtn}" Width="176" Height="36"
                                     FontSize="13" FontWeight="Bold" Margin="8,0,0,0" Click="Save_Click"/>
                             <TextBox x:Name="CallbackBox" DockPanel.Dock="Right"
-                                     Style="{StaticResource Input}" Width="72" Height="34"
+                                     Style="{StaticResource Input}" Width="72" MinHeight="34"
                                      Margin="8,0,0,0" Visibility="Collapsed"
                                      ToolTip="콜백 시간 (예: 14:30)"/>
-                            <TextBox x:Name="MemoBox" Style="{StaticResource Input}" Height="34"/>
+                            <TextBox x:Name="MemoBox" Style="{StaticResource Input}" MinHeight="34"/>
                         </DockPanel>
                     </StackPanel>
                 </Border>

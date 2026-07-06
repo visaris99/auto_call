@@ -77,7 +77,7 @@
         <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
         <Setter Property="Background" Value="{StaticResource B.Surface2}"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
@@ -103,7 +103,7 @@
     <Style x:Key="Input" TargetType="TextBox">
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="MinHeight" Value="38"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
@@ -133,7 +133,7 @@
     <Style x:Key="InputPassword" TargetType="PasswordBox">
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="MinHeight" Value="38"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
