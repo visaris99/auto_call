@@ -711,10 +711,16 @@ public partial class MainWindow : Window
         foreach (var (c, b) in _resultButtons)
             b.IsChecked = c == code;
         bool needsTime = code is "CALLBACK" or "APPOINTMENT";
-        CallbackBox.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
+        CallbackPanel.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
+        CallbackLabel.Text = code == "APPOINTMENT" ? "상담 예약 시간" : "콜백 예약 시간";
+        CallbackHint.Text = code == "APPOINTMENT"
+            ? "HH:MM 입력 · 지난 시간은 내일 예약"
+            : "HH:MM 입력 · 지난 시간은 내일 콜백";
         CallbackBox.ToolTip = code == "APPOINTMENT"
             ? "예약 시간 (예: 14:30)"
             : "콜백 시간 (예: 14:30)";
+        if (needsTime)
+            CallbackBox.Focus();
     }
 
     private void ResetForm()
@@ -724,7 +730,7 @@ public partial class MainWindow : Window
             b.IsChecked = false;
         MemoBox.Text = "";
         CallbackBox.Text = "";
-        CallbackBox.Visibility = Visibility.Collapsed;
+        CallbackPanel.Visibility = Visibility.Collapsed;
         _talkSeconds = 0;
         TimerText.Text = "00:00";
     }
