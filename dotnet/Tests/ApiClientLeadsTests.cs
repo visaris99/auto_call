@@ -44,6 +44,20 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task Queue_SendsStatusFilters()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("GET", "/api/v1/leads/queue", 200,
+            new { serverTime = "2026-07-05T10:00:00+09:00", items = Array.Empty<object>() });
+
+        await client.QueueAsync(limit: 500, statuses: new[] { "NEW", "ASSIGNED" });
+
+        var (_, path, _, _) = crm.Last;
+        Assert.Equal("/api/v1/leads/queue?limit=500&status=NEW&status=ASSIGNED", path);
+    }
+
+    [Fact]
     public async Task Reveal_SendsReason_ReturnsPhone()
     {
         var (crm, client) = await LoggedInAsync();

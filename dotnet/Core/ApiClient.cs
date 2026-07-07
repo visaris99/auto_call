@@ -128,9 +128,16 @@ public sealed class ApiClient
 
     // ---- 리드/콜 ----
 
-    public async Task<List<LeadItem>> QueueAsync(int limit = 50)
+    public async Task<List<LeadItem>> QueueAsync(int limit = 50, IEnumerable<string>? statuses = null)
     {
-        var data = await RequestAsync(HttpMethod.Get, $"/leads/queue?limit={limit}")
+        string path = $"/leads/queue?limit={limit}";
+        if (statuses != null)
+        {
+            foreach (string status in statuses.Where(s => !string.IsNullOrWhiteSpace(s)))
+                path += $"&status={Uri.EscapeDataString(status.Trim())}";
+        }
+
+        var data = await RequestAsync(HttpMethod.Get, path)
             .ConfigureAwait(false);
         return data!.Value.Deserialize<QueueResponse>(Json)!.Items;
     }

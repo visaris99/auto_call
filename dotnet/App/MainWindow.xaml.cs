@@ -53,6 +53,7 @@ public partial class MainWindow : Window
         ("NOANSWER", "부재", new[] { "NOANSWER" }),
         ("CONSULT", "상담중", new[] { "CONSULT" }),
     };
+    private const int QueueFetchLimit = 500;
 
     private static bool IsSecondaryResult(string code) =>
         code is "APPOINTMENT" or "HANDOFF" or "RISK" or "INVALID_NUMBER";
@@ -303,7 +304,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            var items = await _client.QueueAsync(limit: 500);  // 서버 허용 최대(500)
+            var items = await FetchQueueByStatusGroupsAsync();
             SetCrm(true);
             _leads = items;
             RenderQueue();
@@ -320,6 +321,18 @@ public partial class MainWindow : Window
             _lastError = ex.Message;
             SetCrm(false);
         }
+    }
+
+    private async Task<List<LeadItem>> FetchQueueByStatusGroupsAsync()
+    {
+        var merged = new Dictionary<string, LeadItem>();
+        foreach (var statuses in Filters.Select(f => f.Statuses).Where(s => s.Length > 0))
+        {
+            var items = await _client.QueueAsync(limit: QueueFetchLimit, statuses);
+            foreach (var item in items)
+                merged[item.Id] = item;
+        }
+        return merged.Values.ToList();
     }
 
     // ---------- 필터 ----------
