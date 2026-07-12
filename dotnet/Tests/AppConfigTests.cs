@@ -18,10 +18,16 @@ public class AppConfigTests : IDisposable
     {
         Environment.SetEnvironmentVariable("TM_SERVER_URL", null);
         string path = Path.Combine(_dir, "config.json");
-        new AppConfig { ServerUrl = "http://crm:3002", LastLoginId = "hong" }.Save(path);
+        new AppConfig
+        {
+            ServerUrl = "http://crm:3002",
+            LastLoginId = "hong",
+            AdbSerial = "R3CN123",
+        }.Save(path);
         var loaded = AppConfig.Load(path);
         Assert.Equal("http://crm:3002", loaded.ServerUrl);
         Assert.Equal("hong", loaded.LastLoginId);
+        Assert.Equal("R3CN123", loaded.AdbSerial);
         Assert.False(string.IsNullOrWhiteSpace(loaded.DeviceCode));
     }
 

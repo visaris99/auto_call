@@ -26,7 +26,21 @@ public sealed record CallLead(string Id, string Status, string? NextCallAt);
 
 public sealed record CallResponse(bool Ok, CallLead Lead);
 
-public sealed record VersionInfo(string? MinVersion, string? LatestVersion, string? DownloadUrl);
+public sealed record CallAttemptResponse(
+    string AttemptId,
+    string LeadId,
+    string Phone,
+    string? ExpiresAt);
+
+public sealed record VersionInfo(
+    string? MinVersion,
+    string? LatestVersion,
+    string? DownloadUrl,
+    string? Sha256 = null,
+    long? Size = null,
+    string? PublishedAt = null,
+    string? KeyId = null,
+    string? Signature = null);
 
 public sealed record CallHistoryItem(
     string ResultCode,

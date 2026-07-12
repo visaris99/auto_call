@@ -6,7 +6,8 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource B.Background}"
         FontFamily="{StaticResource AppFont}"
-        PreviewKeyDown="Window_PreviewKeyDown">
+        PreviewKeyDown="Window_PreviewKeyDown"
+        Closing="Window_Closing">
     <DockPanel>
         <!-- 상단 상태바 -->
         <Border DockPanel.Dock="Top" Background="{StaticResource B.Surface}"
@@ -21,6 +22,12 @@
                     </TextBlock>
                     <TextBlock x:Name="BannerText" FontSize="11" Foreground="{StaticResource B.Danger}"
                                VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <ComboBox x:Name="DeviceSelector" Width="150" Height="28"
+                              Margin="0,0,10,0" FontSize="11"
+                              DisplayMemberPath="Serial"
+                              ToolTip="발신에 사용할 Android 장치"
+                              Visibility="Collapsed"
+                              SelectionChanged="DeviceSelector_SelectionChanged"/>
                     <TextBlock x:Name="AdbDot" Text="● ADB" FontSize="12"
                                Foreground="{StaticResource B.Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock x:Name="CrmDot" Text="● CRM" FontSize="12"
@@ -118,7 +125,7 @@
                                        Foreground="{StaticResource B.Gold}" VerticalAlignment="Center"/>
                             <Button x:Name="CopyPhoneBtn" Content="번호 복사" Style="{StaticResource GhostBtn}"
                                     Width="86" MinHeight="30" FontSize="12" Margin="10,0,0,0"
-                                    IsEnabled="False" Click="CopyLeadPhone_Click"/>
+                                    IsEnabled="False" Visibility="Collapsed" Click="CopyLeadPhone_Click"/>
                         </StackPanel>
                         <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
@@ -149,11 +156,13 @@
                             <CheckBox x:Name="AutoDialCheck" Content="연속 발신" FontSize="12"
                                       Foreground="{StaticResource B.Foreground}"
                                       Margin="16,0,0,0" VerticalAlignment="Center"
+                                      Visibility="Collapsed"
                                       ToolTip="결과 저장 후 3초 뒤 다음 리드에 자동 발신 (ESC로 중단)"
                                       Checked="AutoDial_Toggled" Unchecked="AutoDial_Toggled"/>
                         </StackPanel>
                         <!-- 수동 발신: CRM 리드와 무관한 번호 직접 발신 (기록 안 됨) -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0"
+                                    Visibility="Collapsed">
                             <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.Muted}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
@@ -176,7 +185,7 @@
                         <TextBlock Text="기본" Style="{StaticResource FieldLabel}" Margin="0,8,0,4"/>
                         <UniformGrid x:Name="PrimaryResultPanel" Columns="7"/>
                         <TextBlock Text="후속/예외" Style="{StaticResource FieldLabel}" Margin="0,10,0,4"/>
-                        <UniformGrid x:Name="SecondaryResultPanel" Columns="4"/>
+                        <UniformGrid x:Name="SecondaryResultPanel" Columns="3"/>
                         <Grid Margin="0,12,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>

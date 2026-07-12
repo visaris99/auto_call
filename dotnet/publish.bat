@@ -28,65 +28,72 @@ if errorlevel 1 (
   )
 )
 
+REM Ui.Version을 앱 PE와 인스톨러의 단일 릴리스 버전으로 사용
+set "APPVER=0.0.0"
+for /f tokens^=2^ delims^=^" %%v in ('findstr /C:"public const string Version" App\Ui.cs') do set "APPVER=%%v"
+if "%APPVER%"=="0.0.0" goto err_version
+
 echo [1/3] Publishing (self-contained, win-x64)...
-"%DOTNET%" publish App -c Release -r win-x64 --self-contained true -o ..\dist_dotnet\milestone_dialer
+"%DOTNET%" publish App -c Release -r win-x64 --self-contained true -o ..\dist_dotnet\milestone_dialer -p:Version=%APPVER% -p:FileVersion=%APPVER%.0 -p:AssemblyVersion=%APPVER%.0 -p:InformationalVersion=%APPVER%
 if errorlevel 1 goto err_build
 
 echo [2/3] Copying adb...
-if exist ..\build\adb\adb.exe (
-  if not exist ..\dist_dotnet\milestone_dialer\adb mkdir ..\dist_dotnet\milestone_dialer\adb
-  copy /Y ..\build\adb\*.* ..\dist_dotnet\milestone_dialer\adb\ >nul
-) else (
-  echo [WARN] ..\build\adb\ has no adb.exe.
-  echo        Copy adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll into
-  echo        dist_dotnet\milestone_dialer\adb\ before distributing.
-)
+if not exist ..\build\adb\adb.exe goto err_adb
+if not exist ..\build\adb\AdbWinApi.dll goto err_adb
+if not exist ..\build\adb\AdbWinUsbApi.dll goto err_adb
+if not exist ..\dist_dotnet\milestone_dialer\adb mkdir ..\dist_dotnet\milestone_dialer\adb
+copy /Y ..\build\adb\*.* ..\dist_dotnet\milestone_dialer\adb\ >nul
 
 echo [3/3] Building installer (Inno Setup)...
-REM App\Ui.cs의 Version 상수를 읽어 인스톨러 버전으로 사용
-set "APPVER=0.0.0"
-for /f tokens^=2^ delims^=^" %%v in ('findstr /C:"public const string Version" App\Ui.cs') do set "APPVER=%%v"
-
-set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if not defined ISCC set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC%" set "ISCC=%LocalAppData%\Programs\Inno Setup 6\ISCC.exe"
+if not exist "%ISCC%" for /f "delims=" %%i in ('where ISCC.exe 2^>nul') do set "ISCC=%%i"
 if exist "%ISCC%" (
   "%ISCC%" /Qp "/DMyAppVersion=%APPVER%" installer.iss
   if errorlevel 1 goto err_installer
   echo.
   echo [OK] dist_dotnet\milestone_dialer_setup_%APPVER%.exe
   echo      Distribute this single setup.exe to employees.
-  echo      (installs to user AppData, adds desktop shortcut, no admin needed)
+  echo      Installs to user AppData, adds desktop shortcut, no admin needed.
 ) else (
   echo [SKIP] Inno Setup 6 not found - https://jrsoftware.org/isinfo.php
   echo.
   echo [OK] dist_dotnet\milestone_dialer\milestone_dialer.exe
   echo      Distribute the whole "milestone_dialer" folder to employees.
 )
-pause
 exit /b 0
 
 :err_unc
 echo.
 echo [ERROR] Cannot run from a network path (\\wsl$ etc). Clone to C:\ first.
-pause
 exit /b 1
 
 :err_dotnet
 echo.
 echo [ERROR] .NET SDK not found. Install .NET 8 SDK:
 echo         https://dotnet.microsoft.com/download/dotnet/8.0
-pause
+exit /b 1
+
+:err_version
+echo.
+echo [ERROR] App\Ui.cs Version could not be parsed.
 exit /b 1
 
 :err_build
 echo.
 echo [ERROR] Publish failed. See messages above.
-pause
+exit /b 1
+
+:err_adb
+echo.
+echo [ERROR] Required ADB runtime is missing.
+echo         Copy adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll into ..\build\adb\
+echo         and run publish.bat again. No installer was produced.
 exit /b 1
 
 :err_installer
 echo.
 echo [ERROR] Installer build failed. See messages above.
 echo         You can still distribute the dist_dotnet\milestone_dialer folder.
-pause
 exit /b 1

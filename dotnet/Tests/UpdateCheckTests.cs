@@ -18,4 +18,12 @@ public class UpdateCheckTests
     [InlineData("2.2.2", " 2.3.0 ", true)]
     public void IsNewer(string current, string? candidate, bool expected) =>
         Assert.Equal(expected, UpdateCheck.IsNewer(current, candidate));
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("0", true)]
+    [InlineData("1", true)]
+    public void IsAutoUpdateDisabled_UsesKillSwitch(string? value, bool expected) =>
+        Assert.Equal(expected, UpdateCheck.IsAutoUpdateDisabled(_ => value));
 }

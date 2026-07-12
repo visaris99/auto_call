@@ -1,4 +1,4 @@
-// UI 공용 헬퍼 — CRM 상태 라벨/색 매핑(ui/theme.py·badge.tsx와 동일), 결과 11종, 리스트 행 모델.
+// UI 공용 헬퍼 — CRM 상태 라벨/색 매핑(ui/theme.py·badge.tsx와 동일), 결과 10종, 리스트 행 모델.
 using System.Windows.Media;
 using Core;
 
@@ -6,7 +6,7 @@ namespace MilestoneDialer;
 
 public static class Ui
 {
-    public const string Version = "2.3.4";
+    public const string Version = "2.4.0";
 
     private static readonly Dictionary<string, Brush> Cache = new();
 
@@ -23,11 +23,19 @@ public static class Ui
 
     private static readonly Dictionary<string, string> Labels = new()
     {
-        ["NEW"] = "신규", ["ASSIGNED"] = "배정됨", ["NOANSWER"] = "부재",
-        ["CALLBACK"] = "콜백예약", ["INTERESTED"] = "가망", ["CONSULT"] = "상담중",
-        ["WON"] = "가입", ["REJECT"] = "거절", ["DNC"] = "수신거부", ["RECYCLE"] = "재활용",
-        ["APPOINTMENT"] = "예약", ["HANDOFF"] = "이관", ["RISK"] = "리스크",
-        ["INVALID_NUMBER"] = "결번",
+        ["NEW"] = "신규",
+        ["ASSIGNED"] = "배정됨",
+        ["NOANSWER"] = "부재",
+        ["CALLBACK"] = "콜백예약",
+        ["INTERESTED"] = "가망",
+        ["CONSULT"] = "상담중",
+        ["WON"] = "가입",
+        ["REJECT"] = "거절",
+        ["DNC"] = "수신거부",
+        ["RECYCLE"] = "재활용",
+        ["APPOINTMENT"] = "예약",
+        ["HANDOFF"] = "이관",
+        ["RISK"] = "리스크",
     };
 
     public static string LabelFor(string status) => Labels.GetValueOrDefault(status, status);
@@ -36,20 +44,20 @@ public static class Ui
     public static (Brush Bg, Brush Fg) StatusColors(string status) => status switch
     {
         "WON" or "INTERESTED" or "CONSULT" => (Brush("#ECDF4A"), Brush("#161410")),
-        "DNC" or "REJECT" or "INVALID_NUMBER" => (Brush("#F7E2DF"), Brush("#B3372C")),
+        "DNC" or "REJECT" => (Brush("#F7E2DF"), Brush("#B3372C")),
         "ASSIGNED" or "CALLBACK" or "APPOINTMENT" => (Brush("#F6EFBE"), Brush("#161410")),
         "HANDOFF" => (Brush("#E7EEF8"), Brush("#244E86")),
         "RISK" => (Brush("#F7E2DF"), Brush("#B3372C")),
         _ => (Brush("#FAF8F2"), Brush("#211F1A")),
     };
 
-    /// <summary>콜 결과 11종 (CRM CALL_RESULT_LABEL) + 단축키 1~9/0.</summary>
+    /// <summary>CRM 콜 결과 10종 + 단축키 1~9/0.</summary>
     public static readonly (string Code, string Label, string Key)[] Results =
     {
         ("NOANSWER", "부재", "1"), ("CALLBACK", "콜백예약", "2"), ("INTERESTED", "가망", "3"),
         ("CONSULT", "상담중", "4"), ("WON", "가입", "5"), ("REJECT", "거절", "6"),
         ("DNC", "수신거부", "7"), ("APPOINTMENT", "예약", "8"), ("HANDOFF", "이관", "9"),
-        ("RISK", "리스크", "0"), ("INVALID_NUMBER", "결번", ""),
+        ("RISK", "리스크", "0"),
     };
 }
 

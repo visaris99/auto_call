@@ -15,6 +15,9 @@ AppId={{B5117FF1-22C3-4F91-BA1E-78F55C78CCD7}}
 AppName=Milestone Dialer
 AppVersion={#MyAppVersion}
 AppPublisher=Milestone Invest
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoProductName=Milestone Dialer
 ; 관리자 권한 없이 직원 계정으로 설치 가능하도록 사용자 폴더에 설치
 DefaultDirName={localappdata}\MilestoneDialer\app
 PrivilegesRequired=lowest
@@ -27,6 +30,7 @@ SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\milestone_dialer.exe
 Compression=lzma2
 SolidCompression=yes
+SetupMutex=MilestoneDialerSetupV1
 
 ; Inno Setup 기본 설치에는 한국어(비공식 번역)가 없다.
 ; 한국어 설치 화면을 원하면 Korean.isl을 받아 Inno Setup의 Languages 폴더에 넣으면 자동 적용.

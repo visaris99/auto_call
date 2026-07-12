@@ -11,4 +11,10 @@ public static class UpdateCheck
                && Version.TryParse(candidate.Trim(), out var theirs)
                && theirs > mine;
     }
+
+    public static bool IsAutoUpdateDisabled(Func<string, string?>? getEnvironmentVariable = null)
+    {
+        getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
+        return !string.IsNullOrWhiteSpace(getEnvironmentVariable("TM_NO_AUTOUPDATE"));
+    }
 }

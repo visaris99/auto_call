@@ -8,9 +8,26 @@ namespace MilestoneDialer;
 
 public partial class App : Application
 {
+    private Mutex? _singleInstanceMutex;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _singleInstanceMutex = new Mutex(
+            initiallyOwned: true,
+            name: @"Local\MilestoneDialer.App.v1",
+            createdNew: out bool isFirstInstance);
+        if (!isFirstInstance)
+        {
+            MessageBox.Show(
+                "마일스톤 다이얼러가 이미 실행 중입니다.",
+                "다이얼러",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
         DispatcherUnhandledException += (_, args) =>
         {
             LogError(args.Exception.ToString());
@@ -24,11 +41,10 @@ public partial class App : Application
         _ = TryAutoUpdateAsync();
     }
 
-    /// <summary>시작 시 자동 업데이트: 새 버전이면 setup.exe 받아 무음 설치 후 종료.
-    /// 어떤 실패든 조용히 무시 — 메인 화면의 '새 버전 받기' 링크가 폴백.</summary>
+    /// <summary>시작 시 서명된 manifest와 설치파일을 검증한 뒤 자동 업데이트한다.</summary>
     private async Task TryAutoUpdateAsync()
     {
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TM_NO_AUTOUPDATE")))
+        if (UpdateCheck.IsAutoUpdateDisabled())
             return;
         UpdateWindow? window = null;
         try
@@ -41,45 +57,72 @@ public partial class App : Application
                 || string.IsNullOrWhiteSpace(info.DownloadUrl))
                 return;
 
-            window = new UpdateWindow();
-            window.SetStatus($"새 버전 v{info.LatestVersion} 다운로드 중…");
-            window.Show();
+            var updateWindow = new UpdateWindow();
+            window = updateWindow;
+            updateWindow.SetStatus($"새 버전 v{info.LatestVersion} 검증 및 다운로드 중…");
+            updateWindow.Show();
 
-            string path = Path.Combine(Path.GetTempPath(),
-                $"milestone_dialer_setup_{info.LatestVersion}.exe");
-            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
-            using (var res = await http.GetAsync(info.DownloadUrl,
-                       HttpCompletionOption.ResponseHeadersRead))
+            var policy = UpdatePolicy.OfficeProduction;
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(10) };
+            var coordinator = new UpdateCoordinator(
+                new UpdateManifestVerifier(policy),
+                new UpdateDownloader(http, policy),
+                new WindowsUpdatePackageInspector(),
+                new ShellUpdateInstaller());
+            var progress = new Progress<UpdateDownloadProgress>(value =>
             {
-                res.EnsureSuccessStatusCode();
-                long total = res.Content.Headers.ContentLength ?? -1;
-                await using var source = await res.Content.ReadAsStreamAsync();
-                await using var target = File.Create(path);
-                var buffer = new byte[81920];
-                long done = 0;
-                int read;
-                while ((read = await source.ReadAsync(buffer)) > 0)
-                {
-                    await target.WriteAsync(buffer.AsMemory(0, read));
-                    done += read;
-                    if (total > 0)
-                        window.SetProgress(done * 100d / total,
-                            $"{done / 1048576}MB / {total / 1048576}MB");
-                }
-            }
+                double percent = value.TotalBytes > 0
+                    ? value.DownloadedBytes * 100d / value.TotalBytes
+                    : 0;
+                updateWindow.SetProgress(
+                    percent,
+                    $"{value.DownloadedBytes / 1048576}MB / {value.TotalBytes / 1048576}MB");
+            });
 
-            window.SetProgress(100, "설치를 시작합니다 — 잠시 후 자동으로 다시 실행됩니다.");
-            // 무음 설치: 실행 중인 앱은 강제 종료·교체되고, installer.iss의 [Run]이 재실행한다
-            Process.Start(new ProcessStartInfo(path,
-                "/VERYSILENT /NORESTART /FORCECLOSEAPPLICATIONS")
-            { UseShellExecute = true });
-            Shutdown();
+            UpdateRunResult result = await coordinator.RunAsync(
+                info, Ui.Version, Path.GetTempPath(), progress);
+            if (result.Status == UpdateRunStatus.InstallerStarted)
+            {
+                updateWindow.SetProgress(100, "검증 완료 — 설치를 시작합니다.");
+                Shutdown();
+            }
+            else
+            {
+                updateWindow.Close();
+            }
+        }
+        catch (UpdateException ex)
+        {
+            LogError($"AutoUpdate 실패 [{ex.Code}]: {ex.Message}");
+            window?.Close();
+            MessageBox.Show(
+                "업데이트 검증 또는 다운로드에 실패했습니다. 기존 버전으로 계속 실행합니다.",
+                "업데이트 확인",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
         catch (Exception ex) when (ex is ApiException or HttpRequestException
-            or IOException or TaskCanceledException or System.ComponentModel.Win32Exception)
+            or IOException or TaskCanceledException or System.ComponentModel.Win32Exception
+            or UnauthorizedAccessException)
         {
-            LogError($"AutoUpdate 실패(무시됨): {ex.Message}");
+            LogError($"AutoUpdate 실패 [{ex.GetType().Name}]: {ex.Message}");
             window?.Close();
+        }
+    }
+
+    private sealed class ShellUpdateInstaller : IUpdateInstaller
+    {
+        public void Start(string verifiedSetupPath)
+        {
+            Process? process = Process.Start(new ProcessStartInfo(
+                verifiedSetupPath,
+                "/VERYSILENT /NORESTART /FORCECLOSEAPPLICATIONS")
+            {
+                UseShellExecute = true,
+            });
+            if (process is null)
+                throw new UpdateInstallException("업데이트 설치 프로세스를 시작하지 못했습니다.");
         }
     }
 

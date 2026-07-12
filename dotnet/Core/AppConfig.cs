@@ -26,6 +26,9 @@ public sealed class AppConfig
     [JsonPropertyName("device_code")]
     public string DeviceCode { get; set; } = "";
 
+    [JsonPropertyName("adb_serial")]
+    public string AdbSerial { get; set; } = "";
+
     public static string ConfigDir()
     {
         string baseDir = OperatingSystem.IsWindows()

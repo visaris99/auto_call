@@ -8,6 +8,9 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>milestone_dialer</AssemblyName>
     <RootNamespace>MilestoneDialer</RootNamespace>
+    <Product>Milestone Dialer</Product>
+    <Company>Milestone Invest</Company>
+    <Description>Milestone CRM Dialer</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>

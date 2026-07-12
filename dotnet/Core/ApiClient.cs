@@ -150,9 +150,49 @@ public sealed class ApiClient
         return data!.Value.GetProperty("phone").GetString()!;
     }
 
+    public async Task<CallAttemptResponse> StartCallAttemptAsync(
+        string leadId,
+        string deviceCode,
+        string deviceSerial,
+        string attemptId)
+    {
+        var data = await RequestAsync(HttpMethod.Post, "/call-attempts",
+            new { leadId, deviceCode, deviceSerial, channel = "ADB" },
+            new Dictionary<string, string> { ["Idempotency-Key"] = attemptId })
+            .ConfigureAwait(false);
+        return data!.Value.Deserialize<CallAttemptResponse>(Json)!;
+    }
+
+    public async Task CancelCallAttemptAsync(string attemptId)
+    {
+        await RequestAsync(HttpMethod.Post,
+            $"/call-attempts/{Uri.EscapeDataString(attemptId)}/cancel")
+            .ConfigureAwait(false);
+    }
+
     public async Task<CallResponse> LogCallAsync(string leadId, string resultCode,
         int talkSeconds, string? memo, string? callbackAt, string idempotencyKey,
         string? appointmentAt = null)
+    {
+        var body = CallResultBody(resultCode, talkSeconds, memo, callbackAt, appointmentAt);
+        var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/call", body,
+            new Dictionary<string, string> { ["Idempotency-Key"] = idempotencyKey })
+            .ConfigureAwait(false);
+        return data!.Value.Deserialize<CallResponse>(Json)!;
+    }
+
+    public async Task<CallResponse> LogCallAttemptAsync(string attemptId, string resultCode,
+        int talkSeconds, string? memo, string? callbackAt, string? appointmentAt = null)
+    {
+        var body = CallResultBody(resultCode, talkSeconds, memo, callbackAt, appointmentAt);
+        var data = await RequestAsync(HttpMethod.Post,
+            $"/call-attempts/{Uri.EscapeDataString(attemptId)}/result", body)
+            .ConfigureAwait(false);
+        return data!.Value.Deserialize<CallResponse>(Json)!;
+    }
+
+    private static Dictionary<string, object?> CallResultBody(string resultCode,
+        int talkSeconds, string? memo, string? callbackAt, string? appointmentAt)
     {
         var body = new Dictionary<string, object?>
         {
@@ -163,10 +203,7 @@ public sealed class ApiClient
         };
         if (appointmentAt != null || resultCode == "APPOINTMENT")
             body["appointmentAt"] = appointmentAt;
-        var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/call", body,
-            new Dictionary<string, string> { ["Idempotency-Key"] = idempotencyKey })
-            .ConfigureAwait(false);
-        return data!.Value.Deserialize<CallResponse>(Json)!;
+        return body;
     }
 
     public async Task HeartbeatAsync(string deviceCode, string clientVersion,
@@ -214,7 +251,7 @@ public sealed class ApiClient
                 .ConfigureAwait(false);
             return data!.Value.Deserialize<VersionInfo>(Json);
         }
-        catch (ApiException)
+        catch (Exception ex) when (ex is ApiException or JsonException)
         {
             return null;
         }

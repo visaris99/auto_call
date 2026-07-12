@@ -14,7 +14,7 @@ public class AdbControllerTests : IDisposable
           printf 'List of devices attached\n'
           cat "$TM_ADB_DEVICES_FILE"
         fi
-        if [ "$2" = "dumpsys" ]; then
+        if [ "$4" = "dumpsys" ]; then
           cat "$TM_ADB_DUMPSYS_FILE"
         fi
         exit ${TM_ADB_EXIT:-0}
@@ -27,7 +27,7 @@ public class AdbControllerTests : IDisposable
           echo List of devices attached
           if exist "%TM_ADB_DEVICES_FILE%" type "%TM_ADB_DEVICES_FILE%"
         )
-        if "%2"=="dumpsys" (
+        if "%4"=="dumpsys" (
           if exist "%TM_ADB_DUMPSYS_FILE%" type "%TM_ADB_DUMPSYS_FILE%"
         )
         if defined TM_ADB_EXIT exit /b %TM_ADB_EXIT%
@@ -87,7 +87,7 @@ public class AdbControllerTests : IDisposable
     public void Call_InvokesCallIntent()
     {
         Assert.True(AdbController.Call("01012341234"));
-        Assert.Contains("shell am start -a android.intent.action.CALL -d tel:01012341234",
+        Assert.Contains("-s R3CN123 shell am start -a android.intent.action.CALL -d tel:01012341234",
             File.ReadAllText(LogPath));
     }
 
@@ -109,7 +109,7 @@ public class AdbControllerTests : IDisposable
     public void Hangup_SendsKeyevent()
     {
         Assert.True(AdbController.Hangup());
-        Assert.Contains("shell input keyevent 6", File.ReadAllText(LogPath));
+        Assert.Contains("-s R3CN123 shell input keyevent 6", File.ReadAllText(LogPath));
     }
 
     [Fact]
@@ -144,5 +144,62 @@ public class AdbControllerTests : IDisposable
     {
         SetDumpsys("no call state here");
         Assert.Null(AdbController.GetCallState());
+    }
+
+    [Fact]
+    public void ParseDevices_PreservesNonReadyStates()
+    {
+        IReadOnlyList<AdbDeviceInfo> devices = AdbController.ParseDevices(
+            "* daemon started successfully\nList of devices attached\n" +
+            "READY\tdevice product:x\nLOCKED\tunauthorized\nOFF\toffline\n");
+
+        Assert.Collection(devices,
+            device =>
+            {
+                Assert.Equal("READY", device.Serial);
+                Assert.True(device.IsReady);
+            },
+            device =>
+            {
+                Assert.Equal("LOCKED", device.Serial);
+                Assert.Equal("unauthorized", device.State);
+                Assert.False(device.IsReady);
+            },
+            device => Assert.Equal("offline", device.State));
+    }
+
+    [Fact]
+    public void ResolveReadyDevice_RequiresSelection_WhenMultipleReady()
+    {
+        AdbDeviceInfo[] devices =
+        {
+            new("FIRST", "device"),
+            new("SECOND", "device"),
+        };
+
+        Assert.Null(AdbController.ResolveReadyDevice(devices));
+        Assert.Equal("SECOND", AdbController.ResolveReadyDevice(devices, "SECOND")?.Serial);
+    }
+
+    [Fact]
+    public async Task AsyncCommands_AlwaysTargetProvidedSerial()
+    {
+        Assert.True(await AdbController.CallAsync("SECOND", "01055556666"));
+        Assert.True(await AdbController.HangupAsync("SECOND"));
+        SetDumpsys("mCallState=2\n");
+        Assert.Equal(2, await AdbController.GetCallStateAsync("SECOND"));
+
+        string log = File.ReadAllText(LogPath);
+        Assert.Contains("-s SECOND shell am start", log);
+        Assert.Contains("-s SECOND shell input keyevent 6", log);
+        Assert.Contains("-s SECOND shell dumpsys telephony.registry", log);
+    }
+
+    [Fact]
+    public void LegacyCall_RejectsAmbiguousMultipleDevices()
+    {
+        SetDevices("FIRST\tdevice\nSECOND\tdevice\n");
+
+        Assert.False(AdbController.Call("01012341234"));
     }
 }
