@@ -107,13 +107,22 @@ public class QueueLogicTests
     }
 
     [Theory]
+    [InlineData("NEW", true, true)]
+    [InlineData("ASSIGNED", true, true)]
     [InlineData("NOANSWER", true, true)]
+    [InlineData("CALLBACK", true, true)]
+    [InlineData("INTERESTED", true, true)]
+    [InlineData("CONSULT", true, true)]
     [InlineData("NOANSWER", false, false)]
-    [InlineData("CALLBACK", true, false)]
-    [InlineData("INTERESTED", true, false)]
-    public void CanRedialAfterSavedResult_RequiresPersistedNoAnswer(
-        string resultCode, bool persisted, bool expected)
+    [InlineData("APPOINTMENT", true, false)]
+    [InlineData("HANDOFF", true, false)]
+    [InlineData("RISK", true, false)]
+    [InlineData("WON", true, false)]
+    [InlineData("REJECT", true, false)]
+    [InlineData("DNC", true, false)]
+    public void CanRedialAfterSavedStatus_RequiresPersistedCallableLead(
+        string leadStatus, bool persisted, bool expected)
     {
-        Assert.Equal(expected, QueueLogic.CanRedialAfterSavedResult(resultCode, persisted));
+        Assert.Equal(expected, QueueLogic.CanRedialAfterSavedStatus(leadStatus, persisted));
     }
 }

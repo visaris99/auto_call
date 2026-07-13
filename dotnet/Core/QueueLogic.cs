@@ -97,6 +97,7 @@ public static class QueueLogic
         return digits;
     }
 
-    public static bool CanRedialAfterSavedResult(string resultCode, bool persisted) =>
-        persisted && string.Equals(resultCode, "NOANSWER", StringComparison.Ordinal);
+    public static bool CanRedialAfterSavedStatus(string leadStatus, bool persisted) =>
+        persisted && leadStatus is "NEW" or "ASSIGNED" or "NOANSWER" or "CALLBACK"
+            or "INTERESTED" or "CONSULT";
 }

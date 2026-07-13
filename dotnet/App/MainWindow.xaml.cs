@@ -1004,12 +1004,16 @@ public partial class MainWindow : Window
         UpdateCallControls();
         try
         {
-            await _client.LogCallAttemptAsync(payload.AttemptId!, payload.ResultCode,
+            CallResponse saved = await _client.LogCallAttemptAsync(
+                payload.AttemptId!, payload.ResultCode,
                 payload.TalkSeconds, payload.Memo, payload.CallbackAt, payload.AppointmentAt);
+            if (saved.Lead.Id != savingSession.LeadId)
+                throw new InvalidOperationException("CRM 저장 응답이 현재 통화 고객과 일치하지 않습니다.");
             if (code == "WON")
                 _todayWon++;
             UpdateToday();
-            CompleteSavedSession(QueueLogic.CanRedialAfterSavedResult(code, persisted: true));
+            CompleteSavedSession(
+                QueueLogic.CanRedialAfterSavedStatus(saved.Lead.Status, persisted: true));
             await RefreshQueueAsync();
             await RefreshTodayAsync();
         }
