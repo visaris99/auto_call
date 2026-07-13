@@ -58,6 +58,48 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task QueueAll_FollowsPages_AndDeduplicatesItems()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("GET", "/api/v1/leads/queue", (_, path, _, _) =>
+        {
+            if (path.Contains("offset=2", StringComparison.Ordinal))
+            {
+                return (200, new
+                {
+                    serverTime = "2026-07-05T10:00:01+09:00",
+                    nextOffset = (int?)null,
+                    items = new[]
+                    {
+                        Lead,
+                        new
+                        {
+                            id = "L2", name = "이영희", phoneMasked = "010-****-5678",
+                            status = "ASSIGNED", nextCallAt = (string?)null,
+                            memo = (string?)null, updatedAt = "2026-07-04T10:01:00+09:00",
+                        },
+                    },
+                });
+            }
+
+            return (200, new
+            {
+                serverTime = "2026-07-05T10:00:00+09:00",
+                nextOffset = (int?)2,
+                items = new[] { Lead },
+            });
+        });
+
+        var items = await client.QueueAllAsync(pageSize: 2);
+
+        Assert.Equal(new[] { "L1", "L2" }, items.Select(item => item.Id));
+        Assert.Equal(2, crm.Requests.Count(request =>
+            request.Path.StartsWith("/api/v1/leads/queue", StringComparison.Ordinal)));
+        Assert.Contains(crm.Requests, request => request.Path == "/api/v1/leads/queue?limit=2&offset=2");
+    }
+
+    [Fact]
     public async Task Reveal_SendsReason_ReturnsPhone()
     {
         var (crm, client) = await LoggedInAsync();

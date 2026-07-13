@@ -391,13 +391,12 @@ public partial class MainWindow : Window
         _refreshingQueue = true;
         try
         {
-            var items = await _client.QueueAsync(limit: QueueFetchLimit);
+            var items = await _client.QueueAllAsync(pageSize: QueueFetchLimit);
             var callableStatuses = Filters.SelectMany(filter => filter.Statuses)
                 .ToHashSet(StringComparer.Ordinal);
             SetCrm(true);
             _leads = items
-                .Where(item => callableStatuses.Contains(item.Status)
-                               && !_completedLeadIds.Contains(item.Id))
+                .Where(item => callableStatuses.Contains(item.Status))
                 .ToList();
 
             CallSessionSnapshot? session = _callSession.Current;
@@ -413,7 +412,7 @@ public partial class MainWindow : Window
             RenderQueue();
             var visible = FilteredLeads();
             if (_current == null || visible.All(x => x.Id != _current.Id))
-                Select(visible.FirstOrDefault());
+                Select(FirstSelectableLead(visible));
         }
         catch (AuthException)
         {
@@ -458,8 +457,12 @@ public partial class MainWindow : Window
             return;
         var visible = FilteredLeads();
         if (_current == null || visible.All(x => x.Id != _current.Id))
-            Select(visible.FirstOrDefault());
+            Select(FirstSelectableLead(visible));
     }
+
+    private LeadItem? FirstSelectableLead(IEnumerable<LeadItem> items) =>
+        items.FirstOrDefault(item => !_completedLeadIds.Contains(item.Id))
+        ?? items.FirstOrDefault();
 
     private List<LeadItem> FilteredLeads()
     {
@@ -549,7 +552,10 @@ public partial class MainWindow : Window
             StatusBadgeText.Foreground = fg;
             StatusBadgeText.Text = Ui.LabelFor(item.Status);
             StatusBadge.Visibility = Visibility.Visible;
-            LeadMemoText.Text = string.IsNullOrEmpty(item.Memo) ? "" : $"리드 메모: {item.Memo}";
+            string memo = string.IsNullOrEmpty(item.Memo) ? "" : $"리드 메모: {item.Memo}";
+            LeadMemoText.Text = _completedLeadIds.Contains(item.Id)
+                ? $"{memo}{(memo.Length > 0 ? " · " : "")}이번 실행에서 처리 완료"
+                : memo;
             LoadHistory(item);
         }
         UpdateSelectionInList(item);
@@ -602,7 +608,7 @@ public partial class MainWindow : Window
 
     private async void Dial_Click(object sender, RoutedEventArgs e)
     {
-        if (_current == null)
+        if (_current == null || _completedLeadIds.Contains(_current.Id))
             return;
         if (_adbSerial == null)
         {
@@ -740,7 +746,9 @@ public partial class MainWindow : Window
         bool canSave = state is CallSessionState.Dialing or CallSessionState.Active
             or CallSessionState.Ended;
 
-        DialBtn.IsEnabled = idle && _current != null && _adbConnected && _adbSerial != null;
+        DialBtn.IsEnabled = idle && _current != null
+            && !_completedLeadIds.Contains(_current.Id)
+            && _adbConnected && _adbSerial != null;
         HangupBtn.IsEnabled = canEnd;
         SaveBtn.IsEnabled = canSave;
         QueueList.IsEnabled = idle;
@@ -965,7 +973,7 @@ public partial class MainWindow : Window
         _leads = _leads.Where(item => item.Id != completed.LeadId).ToList();
         _current = null;
         RenderQueue();
-        Select(FilteredLeads().FirstOrDefault());
+        Select(FirstSelectableLead(FilteredLeads()));
     }
 
     private void ResumeAuthNavigationAfterResult()

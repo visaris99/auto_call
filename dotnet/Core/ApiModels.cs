@@ -20,7 +20,7 @@ public sealed record LeadItem(
     string? Memo,
     string? UpdatedAt);
 
-public sealed record QueueResponse(string? ServerTime, List<LeadItem> Items);
+public sealed record QueueResponse(string? ServerTime, List<LeadItem> Items, int? NextOffset = null);
 
 public sealed record CallLead(string Id, string Status, string? NextCallAt);
 

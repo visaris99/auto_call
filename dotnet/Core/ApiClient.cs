@@ -130,7 +130,16 @@ public sealed class ApiClient
 
     public async Task<List<LeadItem>> QueueAsync(int limit = 50, IEnumerable<string>? statuses = null)
     {
+        QueueResponse page = await QueuePageAsync(limit, statuses: statuses).ConfigureAwait(false);
+        return page.Items;
+    }
+
+    public async Task<QueueResponse> QueuePageAsync(int limit = 50, int offset = 0,
+        IEnumerable<string>? statuses = null)
+    {
         string path = $"/leads/queue?limit={limit}";
+        if (offset > 0)
+            path += $"&offset={offset}";
         if (statuses != null)
         {
             foreach (string status in statuses.Where(s => !string.IsNullOrWhiteSpace(s)))
@@ -139,7 +148,35 @@ public sealed class ApiClient
 
         var data = await RequestAsync(HttpMethod.Get, path)
             .ConfigureAwait(false);
-        return data!.Value.Deserialize<QueueResponse>(Json)!.Items;
+        return data!.Value.Deserialize<QueueResponse>(Json)!;
+    }
+
+    public async Task<List<LeadItem>> QueueAllAsync(int pageSize = 500,
+        IEnumerable<string>? statuses = null, int maxPages = 100)
+    {
+        string[]? statusValues = statuses?.ToArray();
+        var items = new List<LeadItem>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        int offset = 0;
+
+        for (int pageNumber = 0; pageNumber < maxPages; pageNumber++)
+        {
+            QueueResponse page = await QueuePageAsync(pageSize, offset, statusValues)
+                .ConfigureAwait(false);
+            foreach (LeadItem item in page.Items)
+            {
+                if (seen.Add(item.Id))
+                    items.Add(item);
+            }
+
+            if (page.NextOffset is null)
+                return items;
+            if (page.NextOffset <= offset)
+                throw new ApiException("INVALID_RESPONSE", "CRM 큐 페이지 응답이 올바르지 않습니다.", 200);
+            offset = page.NextOffset.Value;
+        }
+
+        throw new ApiException("QUEUE_TOO_LARGE", "CRM 큐 페이지 수가 안전 한도를 초과했습니다.", 200);
     }
 
     /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.</summary>
