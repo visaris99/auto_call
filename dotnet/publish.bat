@@ -52,6 +52,8 @@ if not exist "%ISCC%" for /f "delims=" %%i in ('where ISCC.exe 2^>nul') do set "
 if exist "%ISCC%" (
   "%ISCC%" /Qp "/DMyAppVersion=%APPVER%" installer.iss
   if errorlevel 1 goto err_installer
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%normalize-setup-metadata.ps1" -SetupPath "%SCRIPT_DIR%..\dist_dotnet\milestone_dialer_setup_%APPVER%.exe" -Version "%APPVER%"
+  if errorlevel 1 goto err_metadata
   echo.
   echo [OK] dist_dotnet\milestone_dialer_setup_%APPVER%.exe
   echo      Distribute this single setup.exe to employees.
@@ -96,4 +98,10 @@ exit /b 1
 echo.
 echo [ERROR] Installer build failed. See messages above.
 echo         You can still distribute the dist_dotnet\milestone_dialer folder.
+exit /b 1
+
+:err_metadata
+echo.
+echo [ERROR] Setup version metadata normalization failed.
+echo         Do not distribute this installer.
 exit /b 1

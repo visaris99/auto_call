@@ -100,6 +100,28 @@ public sealed class UpdateCoordinatorTests : IDisposable
         Assert.Equal("PACKAGE_NOT_PE", error.Code);
     }
 
+    [Fact]
+    public void WindowsInspector_AcceptsInnoMetadataPadding()
+    {
+        WindowsUpdatePackageInspector.VerifyMetadata(
+            "Milestone Dialer                                            ",
+            "2.4.5                                             ",
+            "2.4.5");
+    }
+
+    [Theory]
+    [InlineData("Another Product", "2.4.5", "PACKAGE_PRODUCT")]
+    [InlineData("Milestone Dialer", "2.4.4", "PACKAGE_VERSION")]
+    public void WindowsInspector_RejectsUnexpectedMetadata(
+        string productName, string productVersion, string expectedCode)
+    {
+        UpdateSecurityException error = Assert.Throws<UpdateSecurityException>(() =>
+            WindowsUpdatePackageInspector.VerifyMetadata(
+                productName, productVersion, "2.4.5"));
+
+        Assert.Equal(expectedCode, error.Code);
+    }
+
     private static UpdateCoordinator Coordinator(
         SignedUpdateFixture fixture,
         IUpdatePackageDownloader downloader,

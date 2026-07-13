@@ -97,7 +97,8 @@ public partial class App : Application
             LogError($"AutoUpdate 실패 [{ex.Code}]: {ex.Message}");
             window?.Close();
             MessageBox.Show(
-                "업데이트 검증 또는 다운로드에 실패했습니다. 기존 버전으로 계속 실행합니다.",
+                $"자동업데이트에 실패했습니다. ({ex.Code})\n" +
+                "기존 버전으로 계속 실행합니다. 관리자에게 오류 코드를 전달하세요.",
                 "업데이트 확인",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

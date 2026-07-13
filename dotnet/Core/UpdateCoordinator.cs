@@ -26,10 +26,21 @@ public sealed class WindowsUpdatePackageInspector : IUpdatePackageInspector
         if (!OperatingSystem.IsWindows()) return;
 
         FileVersionInfo info = FileVersionInfo.GetVersionInfo(setupPath);
-        if (!string.Equals(info.ProductName, "Milestone Dialer", StringComparison.OrdinalIgnoreCase))
+        VerifyMetadata(info.ProductName, info.ProductVersion, expectedVersion);
+    }
+
+    public static void VerifyMetadata(
+        string? productName,
+        string? productVersion,
+        string expectedVersion)
+    {
+        if (!string.Equals(
+                productName?.Trim(),
+                "Milestone Dialer",
+                StringComparison.OrdinalIgnoreCase))
             throw new UpdateSecurityException(
                 "PACKAGE_PRODUCT", "업데이트 파일의 제품명이 올바르지 않습니다.");
-        if (!VersionsEqual(expectedVersion, info.ProductVersion))
+        if (!VersionsEqual(expectedVersion, productVersion?.Trim()))
             throw new UpdateSecurityException(
                 "PACKAGE_VERSION", "업데이트 파일의 제품 버전이 manifest와 다릅니다.");
     }
