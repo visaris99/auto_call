@@ -182,9 +182,15 @@ public sealed class ApiClient
     /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.</summary>
     public async Task<string> RevealAsync(string leadId, string reason = "TM 발신")
     {
+        LeadReveal contact = await RevealLeadAsync(leadId, reason).ConfigureAwait(false);
+        return contact.Phone;
+    }
+
+    public async Task<LeadReveal> RevealLeadAsync(string leadId, string reason = "담당 리드 연락처 확인")
+    {
         var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/reveal",
             new { reason }).ConfigureAwait(false);
-        return data!.Value.GetProperty("phone").GetString()!;
+        return data!.Value.Deserialize<LeadReveal>(Json)!;
     }
 
     public async Task<CallAttemptResponse> StartCallAttemptAsync(

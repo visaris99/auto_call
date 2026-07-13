@@ -125,7 +125,7 @@
                                        Foreground="{StaticResource B.Gold}" VerticalAlignment="Center"/>
                             <Button x:Name="CopyPhoneBtn" Content="번호 복사" Style="{StaticResource GhostBtn}"
                                     Width="86" MinHeight="30" FontSize="12" Margin="10,0,0,0"
-                                    IsEnabled="False" Visibility="Collapsed" Click="CopyLeadPhone_Click"/>
+                                    IsEnabled="False" Click="CopyLeadPhone_Click"/>
                         </StackPanel>
                         <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>

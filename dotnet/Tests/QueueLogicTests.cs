@@ -95,4 +95,14 @@ public class QueueLogicTests
     {
         Assert.Equal(expected, QueueLogic.PhoneDigits(raw));
     }
+
+    [Theory]
+    [InlineData("01012345678", "010-1234-5678")]
+    [InlineData("0212345678", "02-1234-5678")]
+    [InlineData("0311234567", "031-123-4567")]
+    [InlineData("02-123-4567", "02-123-4567")]
+    public void FormatPhone_DisplaysKoreanPhoneNumbers(string raw, string expected)
+    {
+        Assert.Equal(expected, QueueLogic.FormatPhone(raw));
+    }
 }

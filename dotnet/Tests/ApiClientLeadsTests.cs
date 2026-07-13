@@ -110,6 +110,22 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task RevealLead_ReturnsFullAssignedContact()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/leads/L1/reveal", 200,
+            new { name = "김철수", phone = "01012341234" });
+
+        LeadReveal contact = await client.RevealLeadAsync("L1");
+
+        Assert.Equal("김철수", contact.Name);
+        Assert.Equal("01012341234", contact.Phone);
+        Assert.Equal("담당 리드 연락처 확인",
+            crm.Last.Body!.Value.GetProperty("reason").GetString());
+    }
+
+    [Fact]
     public async Task StartCallAttempt_SendsDeviceAndAttemptId()
     {
         var (crm, client) = await LoggedInAsync();

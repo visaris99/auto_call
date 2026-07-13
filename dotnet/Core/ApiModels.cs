@@ -22,6 +22,8 @@ public sealed record LeadItem(
 
 public sealed record QueueResponse(string? ServerTime, List<LeadItem> Items, int? NextOffset = null);
 
+public sealed record LeadReveal(string Phone, string? Name = null);
+
 public sealed record CallLead(string Id, string Status, string? NextCallAt);
 
 public sealed record CallResponse(bool Ok, CallLead Lead);

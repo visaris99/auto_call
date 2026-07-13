@@ -35,6 +35,10 @@ public partial class MainWindow : Window
     private bool _pollingCallState;
     private bool _serverStats;           // /me/today 사용 가능 여부
     private int _historyToken;
+    private int _contactToken;
+    private int _clipboardToken;
+    private string? _revealedLeadId;
+    private string? _revealedPhone;
     private string? _downloadUrl;
     private bool _adbConnected;
     private bool _sendingHeartbeat;
@@ -82,11 +86,10 @@ public partial class MainWindow : Window
         BuildResultButtons();
         BuildFilterChips();
         UpdateBanner();
-        // CRM 정책을 우회하는 수동/복사/연속 발신은 안전한 서버 계약 전까지 중단한다.
+        // CRM 정책을 우회하는 수동/연속 발신은 안전한 서버 계약 전까지 중단한다.
         ManualBox.IsEnabled = false;
         ManualPasteBtn.IsEnabled = false;
         ManualDialBtn.IsEnabled = false;
-        CopyPhoneBtn.IsEnabled = false;
         if (config.AutoDial)
         {
             config.AutoDial = false;
@@ -529,6 +532,9 @@ public partial class MainWindow : Window
             return;
         bool changed = item?.Id != _current?.Id;
         _current = item;
+        _contactToken++;
+        _revealedLeadId = null;
+        _revealedPhone = null;
         CancelAutoDial();
         if (changed && !_callSession.LocksLeadSelection)
             ResetForm();
@@ -557,15 +563,64 @@ public partial class MainWindow : Window
                 ? $"{memo}{(memo.Length > 0 ? " · " : "")}이번 실행에서 처리 완료"
                 : memo;
             LoadHistory(item);
+            LoadContact(item, _contactToken);
         }
         UpdateSelectionInList(item);
         UpdateCallControls();
     }
 
-    private void CopyLeadPhone_Click(object sender, RoutedEventArgs e)
+    private async void LoadContact(LeadItem item, int token)
     {
-        MessageBox.Show("개인정보 보호를 위해 번호 복사 기능이 중단되었습니다.", "번호 복사",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        try
+        {
+            LeadReveal contact = await _client.RevealLeadAsync(item.Id);
+            if (token != _contactToken || _current?.Id != item.Id)
+                return;
+            _revealedLeadId = item.Id;
+            _revealedPhone = contact.Phone;
+            if (!string.IsNullOrWhiteSpace(contact.Name))
+                NameText.Text = contact.Name;
+            PhoneText.Text = QueueLogic.FormatPhone(contact.Phone);
+            CopyPhoneBtn.IsEnabled = true;
+        }
+        catch (AuthException)
+        {
+            OnAuthLost();
+        }
+        catch (NetworkException ex)
+        {
+            _lastError = ex.Message;
+            SetCrm(false);
+        }
+        catch (ApiException ex)
+        {
+            _lastError = ex.Message;
+            CopyPhoneBtn.ToolTip = ex.Message;
+        }
+    }
+
+    private async void CopyLeadPhone_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null || _revealedLeadId != _current.Id
+            || string.IsNullOrWhiteSpace(_revealedPhone))
+            return;
+        string phone = _revealedPhone;
+        int token = ++_clipboardToken;
+        try
+        {
+            Clipboard.SetText(phone);
+            FlashBanner("전화번호를 복사했습니다.");
+            await Task.Delay(TimeSpan.FromSeconds(60));
+            if (token == _clipboardToken && Clipboard.ContainsText()
+                && Clipboard.GetText() == phone)
+                Clipboard.Clear();
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException
+                                   or InvalidOperationException)
+        {
+            MessageBox.Show("클립보드에 전화번호를 복사하지 못했습니다.", "번호 복사",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void UpdateSelectionInList(LeadItem? item)

@@ -82,4 +82,18 @@ public static class QueueLogic
             return "0" + digits[2..];
         return digits;
     }
+
+    public static string FormatPhone(string text)
+    {
+        string digits = PhoneDigits(text);
+        if (digits.Length == 11)
+            return $"{digits[..3]}-{digits[3..7]}-{digits[7..]}";
+        if (digits.Length == 10 && digits.StartsWith("02", StringComparison.Ordinal))
+            return $"{digits[..2]}-{digits[2..6]}-{digits[6..]}";
+        if (digits.Length == 10)
+            return $"{digits[..3]}-{digits[3..6]}-{digits[6..]}";
+        if (digits.Length == 9 && digits.StartsWith("02", StringComparison.Ordinal))
+            return $"{digits[..2]}-{digits[2..5]}-{digits[5..]}";
+        return digits;
+    }
 }
