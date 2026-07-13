@@ -179,6 +179,13 @@ public sealed class ApiClient
         throw new ApiException("QUEUE_TOO_LARGE", "CRM 큐 페이지 수가 안전 한도를 초과했습니다.", 200);
     }
 
+    public async Task<LeadItem> ResolveAssignedLeadAsync(string phone)
+    {
+        var data = await RequestAsync(HttpMethod.Post, "/leads/resolve-phone", new { phone })
+            .ConfigureAwait(false);
+        return data!.Value.GetProperty("lead").Deserialize<LeadItem>(Json)!;
+    }
+
     /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.</summary>
     public async Task<string> RevealAsync(string leadId, string reason = "TM 발신")
     {

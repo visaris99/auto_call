@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private bool _sendingHeartbeat;
     private bool _refreshingDevices;
     private bool _refreshingQueue;
+    private bool _resolvingManualCall;
     private bool _flushingPending;
     private bool _authLost;
     private bool _waitingForExpiredSessionResult;
@@ -86,10 +87,7 @@ public partial class MainWindow : Window
         BuildResultButtons();
         BuildFilterChips();
         UpdateBanner();
-        // CRM 정책을 우회하는 수동/연속 발신은 안전한 서버 계약 전까지 중단한다.
-        ManualBox.IsEnabled = false;
-        ManualPasteBtn.IsEnabled = false;
-        ManualDialBtn.IsEnabled = false;
+        // 연속 발신은 별도 운영 승인 전까지 중단한다.
         if (config.AutoDial)
         {
             config.AutoDial = false;
@@ -780,17 +778,67 @@ public partial class MainWindow : Window
         UpdateCallControls();
     }
 
-    /// <summary>CRM 정책을 우회하므로 안전한 manual-call API가 생길 때까지 비활성화.</summary>
-    private void ManualDial_Click(object sender, RoutedEventArgs e)
+    private async void ManualDial_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("수동 발신은 CRM 정책 검사와 감사 기록을 지원할 때까지 사용할 수 없습니다.",
-            "수동 발신", MessageBoxButton.OK, MessageBoxImage.Information);
+        if (_resolvingManualCall || _callSession.State != CallSessionState.Idle)
+            return;
+        if (!_adbConnected || _adbSerial == null)
+        {
+            MessageBox.Show("발신할 Android 장치를 먼저 선택하세요.", "수동 발신",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        string phone = QueueLogic.PhoneDigits(ManualBox.Text);
+        if (phone.Length is < 9 or > 11)
+        {
+            MessageBox.Show("전화번호 형식을 확인하세요.", "수동 발신",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _resolvingManualCall = true;
+        UpdateCallControls();
+        try
+        {
+            LeadItem lead = await _client.ResolveAssignedLeadAsync(phone);
+            _completedLeadIds.Remove(lead.Id);
+            int index = _leads.FindIndex(item => item.Id == lead.Id);
+            if (index >= 0)
+                _leads[index] = lead;
+            else
+                _leads.Add(lead);
+            ManualBox.Text = "";
+            RenderQueue();
+            Select(lead);
+            Dial_Click(this, new RoutedEventArgs());
+        }
+        catch (AuthException)
+        {
+            OnAuthLost();
+        }
+        catch (Exception ex)
+        {
+            HandleError(ex);
+        }
+        finally
+        {
+            _resolvingManualCall = false;
+            UpdateCallControls();
+        }
     }
 
     private void ManualPaste_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("수동 발신 기능이 중단되어 있습니다.", "수동 발신",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        try
+        {
+            if (Clipboard.ContainsText())
+                ManualBox.Text = QueueLogic.FormatPhone(Clipboard.GetText());
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            MessageBox.Show("클립보드 내용을 읽지 못했습니다.", "붙여넣기",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void UpdateCallControls()
@@ -814,6 +862,10 @@ public partial class MainWindow : Window
         MemoBox.IsEnabled = canSave;
         CallbackBox.IsEnabled = canSave;
         DeviceSelector.IsEnabled = idle && DeviceSelector.Items.Count > 1;
+        ManualBox.IsEnabled = idle && !_resolvingManualCall;
+        ManualPasteBtn.IsEnabled = idle && !_resolvingManualCall;
+        ManualDialBtn.IsEnabled = idle && !_resolvingManualCall
+            && _adbConnected && _adbSerial != null;
         DialBtn.Content = state == CallSessionState.Authorizing ? "확인 중…" : "발신 (F1)";
         HangupBtn.Content = state == CallSessionState.Ending ? "종료 확인 중…" : "종료 (F2)";
         SaveBtn.Content = state == CallSessionState.Saving ? "저장 중…" : "저장하고 다음 (F3)";
@@ -957,7 +1009,7 @@ public partial class MainWindow : Window
             if (code == "WON")
                 _todayWon++;
             UpdateToday();
-            CompleteSavedSession();
+            CompleteSavedSession(QueueLogic.CanRedialAfterSavedResult(code, persisted: true));
             await RefreshQueueAsync();
             await RefreshTodayAsync();
         }
@@ -1017,12 +1069,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CompleteSavedSession()
+    private void CompleteSavedSession(bool allowRedial = false)
     {
         CallSessionSnapshot? completed = _callSession.CompleteSaving();
         if (completed == null)
             return;
-        _completedLeadIds.Add(completed.LeadId);
+        if (allowRedial)
+            _completedLeadIds.Remove(completed.LeadId);
+        else
+            _completedLeadIds.Add(completed.LeadId);
         ResetCallUi();
         ResetForm();
         _leads = _leads.Where(item => item.Id != completed.LeadId).ToList();

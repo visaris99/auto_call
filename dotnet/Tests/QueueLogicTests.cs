@@ -105,4 +105,15 @@ public class QueueLogicTests
     {
         Assert.Equal(expected, QueueLogic.FormatPhone(raw));
     }
+
+    [Theory]
+    [InlineData("NOANSWER", true, true)]
+    [InlineData("NOANSWER", false, false)]
+    [InlineData("CALLBACK", true, false)]
+    [InlineData("INTERESTED", true, false)]
+    public void CanRedialAfterSavedResult_RequiresPersistedNoAnswer(
+        string resultCode, bool persisted, bool expected)
+    {
+        Assert.Equal(expected, QueueLogic.CanRedialAfterSavedResult(resultCode, persisted));
+    }
 }

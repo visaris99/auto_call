@@ -96,4 +96,7 @@ public static class QueueLogic
             return $"{digits[..2]}-{digits[2..5]}-{digits[5..]}";
         return digits;
     }
+
+    public static bool CanRedialAfterSavedResult(string resultCode, bool persisted) =>
+        persisted && string.Equals(resultCode, "NOANSWER", StringComparison.Ordinal);
 }

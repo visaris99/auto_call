@@ -109,7 +109,10 @@
             </Border>
 
             <!-- 우측: 고객 카드 / 통화 / 결과 -->
-            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+            <ScrollViewer Grid.Column="1" Margin="6,0,0,0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,4,0">
                 <Border Style="{StaticResource Card}" Padding="20,16">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
@@ -160,14 +163,13 @@
                                       ToolTip="결과 저장 후 3초 뒤 다음 리드에 자동 발신 (ESC로 중단)"
                                       Checked="AutoDial_Toggled" Unchecked="AutoDial_Toggled"/>
                         </StackPanel>
-                        <!-- 수동 발신: CRM 리드와 무관한 번호 직접 발신 (기록 안 됨) -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0"
-                                    Visibility="Collapsed">
+                        <!-- 수동 입력 번호를 담당 CRM 리드로 확인한 뒤 기존 승인 발신 흐름을 사용한다. -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
                             <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.Muted}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
                                      MinHeight="32" FontSize="12"
-                                     ToolTip="전화번호 붙여넣기 가능 (하이픈·공백·+82 자동 정리) — CRM에 기록되지 않습니다"/>
+                                     ToolTip="배정된 고객 전화번호 입력 (하이픈·공백·+82 자동 정리)"/>
                             <Button x:Name="ManualPasteBtn" Content="붙여넣기" Style="{StaticResource GhostBtn}"
                                     Width="86" MinHeight="32" FontSize="12" Margin="8,0,0,0"
                                     Click="ManualPaste_Click"/>
@@ -232,6 +234,7 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
+            </ScrollViewer>
         </Grid>
     </DockPanel>
 </Window>

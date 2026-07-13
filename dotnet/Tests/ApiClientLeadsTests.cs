@@ -100,6 +100,19 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task ResolveAssignedLead_SendsPhone_AndReturnsLead()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/leads/resolve-phone", 200, new { lead = Lead });
+
+        LeadItem lead = await client.ResolveAssignedLeadAsync("01012341234");
+
+        Assert.Equal("L1", lead.Id);
+        Assert.Equal("01012341234", crm.Last.Body!.Value.GetProperty("phone").GetString());
+    }
+
+    [Fact]
     public async Task Reveal_SendsReason_ReturnsPhone()
     {
         var (crm, client) = await LoggedInAsync();
