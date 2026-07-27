@@ -536,12 +536,15 @@ public partial class MainWindow : Window
         CancelAutoDial();
         if (changed && !_callSession.LocksLeadSelection)
             ResetForm();
+        NameEditPanel.Visibility = Visibility.Collapsed;
+        NameEditBox.Text = "";
         if (item == null)
         {
             NameText.Text = "대기 중인 콜이 없습니다";
             PhoneText.Text = "큐가 비어 있습니다 — 새 배정을 기다리세요";
             LeadMemoText.Text = "";
             StatusBadge.Visibility = Visibility.Collapsed;
+            EditNameBtn.Visibility = Visibility.Collapsed;
             HistoryList.ItemsSource = null;
             CopyPhoneBtn.IsEnabled = false;
             _historyToken++;
@@ -556,6 +559,7 @@ public partial class MainWindow : Window
             StatusBadgeText.Foreground = fg;
             StatusBadgeText.Text = Ui.LabelFor(item.Status);
             StatusBadge.Visibility = Visibility.Visible;
+            EditNameBtn.Visibility = Visibility.Visible;
             string memo = string.IsNullOrEmpty(item.Memo) ? "" : $"리드 메모: {item.Memo}";
             LeadMemoText.Text = _completedLeadIds.Contains(item.Id)
                 ? $"{memo}{(memo.Length > 0 ? " · " : "")}이번 실행에서 처리 완료"
@@ -654,6 +658,66 @@ public partial class MainWindow : Window
         catch (ApiException)
         {
             // 이력 로드 실패는 무시 — 표시만 생략
+        }
+    }
+
+    // ---------- 이름 수정 ----------
+
+    private void EditNameBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null)
+            return;
+        NameEditBox.Text = "";
+        NameSaveBtn.IsEnabled = false;
+        NameEditPanel.Visibility = Visibility.Visible;
+        NameEditBox.Focus();
+    }
+
+    private void NameEditBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        NameSaveBtn.IsEnabled = !string.IsNullOrWhiteSpace(NameEditBox.Text);
+    }
+
+    private void NameCancel_Click(object sender, RoutedEventArgs e)
+    {
+        NameEditPanel.Visibility = Visibility.Collapsed;
+        NameEditBox.Text = "";
+    }
+
+    private async void NameSave_Click(object sender, RoutedEventArgs e)
+    {
+        if (_current == null)
+            return;
+        string name = NameEditBox.Text.Trim();
+        if (name.Length == 0)
+            return;
+        var lead = _current;
+        NameSaveBtn.IsEnabled = false;
+        NameCancelBtn.IsEnabled = false;
+        try
+        {
+            await _client.UpdateLeadNameAsync(lead.Id, name);
+            var updated = lead with { Name = name };
+            _current = updated;
+            _leads = _leads.Select(x => x.Id == lead.Id ? updated : x).ToList();
+            NameText.Text = name;
+            NameEditPanel.Visibility = Visibility.Collapsed;
+            NameEditBox.Text = "";
+            RenderQueue();
+            FlashBanner("이름 저장됨");
+        }
+        catch (AuthException)
+        {
+            OnAuthLost();
+        }
+        catch (Exception ex)
+        {
+            HandleError(ex);
+        }
+        finally
+        {
+            NameCancelBtn.IsEnabled = true;
+            NameSaveBtn.IsEnabled = !string.IsNullOrWhiteSpace(NameEditBox.Text);
         }
     }
 

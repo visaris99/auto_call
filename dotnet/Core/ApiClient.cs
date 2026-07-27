@@ -263,6 +263,14 @@ public sealed class ApiClient
             new { deviceCode, clientVersion, adbConnected, lastError }).ConfigureAwait(false);
     }
 
+    /// <summary>리드 이름 수정(본인 배정 리드만). 빈/공백 이름·200자 초과는 서버에서 400 VALIDATION,
+    /// 본인 배정 리드가 아니면 404.</summary>
+    public async Task UpdateLeadNameAsync(string leadId, string name)
+    {
+        await RequestAsync(HttpMethod.Patch, $"/leads/{leadId}/name", new { name })
+            .ConfigureAwait(false);
+    }
+
     /// <summary>리드 상담 이력. 서버 미구현/본인 리드 아님(404)이면 null.</summary>
     public async Task<List<CallHistoryItem>?> HistoryAsync(string leadId, int limit = 10)
     {

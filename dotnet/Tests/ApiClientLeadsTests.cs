@@ -252,6 +252,32 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task UpdateLeadName_SendsPatch_WithNameBody()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("PATCH", "/api/v1/leads/L1/name", 200, new { ok = true });
+        await client.UpdateLeadNameAsync("L1", "홍길동");
+        var (method, path, _, body) = crm.Last;
+        Assert.Equal("PATCH", method);
+        Assert.Equal("/api/v1/leads/L1/name", path);
+        Assert.Equal("홍길동", body!.Value.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateLeadName_NotOwnLead_Throws404()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("PATCH", "/api/v1/leads/L1/name", 404,
+            new { error = new { code = "NOT_FOUND", message = "본인에게 배정된 리드가 아닙니다." } });
+        var ex = await Assert.ThrowsAsync<ApiException>(
+            () => client.UpdateLeadNameAsync("L1", "홍길동"));
+        Assert.Equal(404, ex.HttpStatus);
+        Assert.Equal("NOT_FOUND", ex.Code);
+    }
+
+    [Fact]
     public async Task CheckVersion_ReturnsNull_WhenMissing()
     {
         var (crm, client) = await LoggedInAsync();

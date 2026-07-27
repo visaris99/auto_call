@@ -118,10 +118,26 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="NameText" Text="-" FontSize="24" FontWeight="Bold"
                                        Foreground="{StaticResource B.Ink}"/>
+                            <Button x:Name="EditNameBtn" Content="✏ 이름수정" Style="{StaticResource GhostBtn}"
+                                    FontSize="11" Padding="8,4" Margin="10,4,0,0" VerticalAlignment="Center"
+                                    Click="EditNameBtn_Click"/>
                             <Border x:Name="StatusBadge" CornerRadius="6" Padding="8,3"
                                     Margin="10,8,0,0" VerticalAlignment="Center" Visibility="Collapsed">
                                 <TextBlock x:Name="StatusBadgeText" FontSize="11" FontWeight="Bold"/>
                             </Border>
+                        </StackPanel>
+                        <!-- 이름 수정: 기본은 접힘, "이름수정" 클릭 시 표시 -->
+                        <StackPanel x:Name="NameEditPanel" Orientation="Horizontal" Margin="0,8,0,0"
+                                    Visibility="Collapsed">
+                            <TextBox x:Name="NameEditBox" Style="{StaticResource Input}" Width="200"
+                                     MaxLength="200" ToolTip="새 이름 입력"
+                                     TextChanged="NameEditBox_TextChanged"/>
+                            <Button x:Name="NameSaveBtn" Content="저장" Style="{StaticResource PrimaryBtn}"
+                                    Width="64" Height="34" FontSize="12" Margin="8,0,0,0" IsEnabled="False"
+                                    Click="NameSave_Click"/>
+                            <Button x:Name="NameCancelBtn" Content="취소" Style="{StaticResource GhostBtn}"
+                                    Width="64" Height="34" FontSize="12" Margin="6,0,0,0"
+                                    Click="NameCancel_Click"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <TextBlock x:Name="PhoneText" Text="-" FontSize="17"
