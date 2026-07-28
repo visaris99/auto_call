@@ -100,4 +100,14 @@ public static class QueueLogic
     public static bool CanRedialAfterSavedStatus(string leadStatus, bool persisted) =>
         persisted && leadStatus is "NEW" or "ASSIGNED" or "NOANSWER" or "CALLBACK"
             or "INTERESTED" or "CONSULT";
+
+    /// <summary>저장 버튼 활성화 조건 — 결과 미선택이거나 CALLBACK/APPOINTMENT의 예약 시간이
+    /// 비어있거나 형식이 잘못되면 비활성화한다.</summary>
+    public static bool CanEnableSave(string? selectedResult, string callbackText, DateTimeOffset now)
+    {
+        if (selectedResult == null)
+            return false;
+        bool needsTime = selectedResult is "CALLBACK" or "APPOINTMENT";
+        return !needsTime || LocalTimeIso(callbackText, now) != null;
+    }
 }

@@ -380,6 +380,19 @@ public partial class MainWindow : Window
         UpdateBanner();
     }
 
+    /// <summary>저장 실행 조건(Ended 상태)에 어긋난 F3/저장 시도를 안내하는 인라인 메시지.</summary>
+    private async void FlashSaveHint(string message)
+    {
+        SaveHintText.Text = message;
+        SaveHintText.Visibility = Visibility.Visible;
+        await Task.Delay(4000);
+        if (SaveHintText.Text == message)
+        {
+            SaveHintText.Text = "";
+            SaveHintText.Visibility = Visibility.Collapsed;
+        }
+    }
+
     // ---------- 큐 ----------
 
     private async void Refresh_Click(object sender, RoutedEventArgs e) =>
@@ -910,21 +923,25 @@ public partial class MainWindow : Window
         CallSessionState state = _callSession.State;
         bool idle = state == CallSessionState.Idle;
         bool canEnd = state is CallSessionState.Dialing or CallSessionState.Active;
-        bool canSave = state is CallSessionState.Dialing or CallSessionState.Active
+        // 결과 선택/메모/콜백 시간 입력은 통화 중에도 미리 할 수 있다 (현행 유지).
+        bool canPickResult = state is CallSessionState.Dialing or CallSessionState.Active
             or CallSessionState.Ended;
+        // 저장 "실행"은 통화가 실제로 종료(Ended)된 뒤, 결과와 필요한 예약 시간이 채워졌을 때만 가능.
+        bool canExecuteSave = state == CallSessionState.Ended
+            && QueueLogic.CanEnableSave(_selectedResult, CallbackBox.Text, DateTimeOffset.Now);
 
         DialBtn.IsEnabled = idle && _current != null
             && !_completedLeadIds.Contains(_current.Id)
             && _adbConnected && _adbSerial != null;
         HangupBtn.IsEnabled = canEnd;
-        SaveBtn.IsEnabled = canSave;
+        SaveBtn.IsEnabled = canExecuteSave;
         QueueList.IsEnabled = idle;
         foreach (ToggleButton chip in _filterChips.Values)
             chip.IsEnabled = idle;
         foreach (ToggleButton resultButton in _resultButtons.Values)
-            resultButton.IsEnabled = canSave;
-        MemoBox.IsEnabled = canSave;
-        CallbackBox.IsEnabled = canSave;
+            resultButton.IsEnabled = canPickResult;
+        MemoBox.IsEnabled = canPickResult;
+        CallbackBox.IsEnabled = canPickResult;
         DeviceSelector.IsEnabled = idle && DeviceSelector.Items.Count > 1;
         ManualBox.IsEnabled = idle && !_resolvingManualCall;
         ManualPasteBtn.IsEnabled = idle && !_resolvingManualCall;
@@ -995,7 +1012,11 @@ public partial class MainWindow : Window
             : "콜백 시간 (예: 14:30)";
         if (needsTime)
             CallbackBox.Focus();
+        UpdateCallControls();
     }
+
+    private void CallbackBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateCallControls();
 
     private void ResetForm()
     {
@@ -1020,6 +1041,12 @@ public partial class MainWindow : Window
         if (currentSession.State is CallSessionState.Authorizing
             or CallSessionState.Ending or CallSessionState.Saving)
             return;
+        if (currentSession.State is CallSessionState.Dialing or CallSessionState.Active)
+        {
+            // 저장은 통화종료(Ended)에서만 실행 — 통화를 끊지 않고 인라인 안내만 표시한다.
+            FlashSaveHint("통화 중입니다 — F2로 종료 후 저장하세요");
+            return;
+        }
         if (_selectedResult == null)
         {
             MessageBox.Show("상담 결과를 먼저 선택하세요.", "결과 선택",
@@ -1047,11 +1074,6 @@ public partial class MainWindow : Window
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-        }
-        if (currentSession.State is CallSessionState.Dialing or CallSessionState.Active)
-        {
-            if (!await EndActiveCallAsync())
-                return;
         }
         if (!_callSession.TryBeginSaving(out CallSessionSnapshot? savingSession))
             return;

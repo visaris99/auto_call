@@ -243,10 +243,14 @@
                                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <TextBox x:Name="CallbackBox" Style="{StaticResource Input}"
                                              Width="120" MinHeight="34" MaxLength="5"
-                                             ToolTip="HH:MM 형식으로 입력하세요. 예: 14:30"/>
+                                             ToolTip="HH:MM 형식으로 입력하세요. 예: 14:30"
+                                             TextChanged="CallbackBox_TextChanged"/>
                                 </DockPanel>
                             </Border>
                         </Grid>
+                        <TextBlock x:Name="SaveHintText" FontSize="12" FontWeight="Bold"
+                                   Foreground="{StaticResource B.Gold}" TextWrapping="Wrap"
+                                   Margin="0,8,0,0" Visibility="Collapsed"/>
                     </StackPanel>
                 </Border>
             </StackPanel>

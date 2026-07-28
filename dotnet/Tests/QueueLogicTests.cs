@@ -125,4 +125,35 @@ public class QueueLogicTests
     {
         Assert.Equal(expected, QueueLogic.CanRedialAfterSavedStatus(leadStatus, persisted));
     }
+
+    [Fact]
+    public void CanEnableSave_RequiresResultSelected()
+    {
+        Assert.False(QueueLogic.CanEnableSave(null, "", Now));
+        Assert.False(QueueLogic.CanEnableSave(null, "14:30", Now));
+    }
+
+    [Theory]
+    [InlineData("WON")]
+    [InlineData("NOANSWER")]
+    [InlineData("REJECT")]
+    [InlineData("HANDOFF")]
+    [InlineData("RISK")]
+    public void CanEnableSave_NonTimeResults_IgnoreCallbackText(string result)
+    {
+        Assert.True(QueueLogic.CanEnableSave(result, "", Now));
+        Assert.True(QueueLogic.CanEnableSave(result, "garbage", Now));
+    }
+
+    [Theory]
+    [InlineData("CALLBACK")]
+    [InlineData("APPOINTMENT")]
+    public void CanEnableSave_TimeResults_RequireValidTime(string result)
+    {
+        Assert.False(QueueLogic.CanEnableSave(result, "", Now));
+        Assert.False(QueueLogic.CanEnableSave(result, "  ", Now));
+        Assert.False(QueueLogic.CanEnableSave(result, "abc", Now));
+        Assert.False(QueueLogic.CanEnableSave(result, "25:00", Now));
+        Assert.True(QueueLogic.CanEnableSave(result, "14:30", Now));
+    }
 }
