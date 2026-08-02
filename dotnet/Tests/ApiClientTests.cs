@@ -119,4 +119,13 @@ public class ApiClientTests
         var client = new ApiClient("http://127.0.0.1:1", TimeSpan.FromSeconds(2));
         await Assert.ThrowsAsync<NetworkException>(() => client.LoginAsync("hong", "pw"));
     }
+
+    [Fact]
+    public async Task InvalidBaseUrl_ThrowsLocalizedNetworkException()
+    {
+        var client = new ApiClient("not a valid absolute url");
+        NetworkException error = await Assert.ThrowsAsync<NetworkException>(
+            () => client.LoginAsync("hong", "pw"));
+        Assert.Equal("서버에 연결할 수 없습니다.", error.Message);
+    }
 }

@@ -1,10 +1,16 @@
 using Core;
+using System.Text.Json;
 using Xunit;
 
 namespace Tests;
 
 public class ApiClientLeadsTests
 {
+    private const string AttemptId = "2f1e8918-8dc3-4aef-ab97-a4513ca0f649";
+    private const string CallbackKey = "10f03171-b9d4-4cab-b63c-cb00451ee959";
+    private const string AppointmentKey = "a3776489-23ec-4edf-8201-abb0614d62a3";
+    private const string NoAnswerKey = "f1e2c58c-92fe-4b55-a3db-81aac813b73e";
+
     private static readonly object Lead = new
     {
         id = "L1",
@@ -143,23 +149,22 @@ public class ApiClientLeadsTests
     {
         var (crm, client) = await LoggedInAsync();
         using var _ = crm;
-        const string attemptId = "2f1e8918-8dc3-4aef-ab97-a4513ca0f649";
         crm.Set("POST", "/api/v1/call-attempts", 200, new
         {
-            attemptId,
+            attemptId = AttemptId,
             leadId = "L1",
             phone = "01012341234",
             expiresAt = "2026-07-10T15:30:00+09:00",
         });
 
         CallAttemptResponse response = await client.StartCallAttemptAsync(
-            "L1", "pc-abc", "R3CN123", attemptId);
+            "L1", "pc-abc", "R3CN123", AttemptId);
 
-        Assert.Equal(attemptId, response.AttemptId);
+        Assert.Equal(AttemptId, response.AttemptId);
         Assert.Equal("01012341234", response.Phone);
         var (_, path, headers, body) = crm.Last;
         Assert.Equal("/api/v1/call-attempts", path);
-        Assert.Equal(attemptId, headers["Idempotency-Key"]);
+        Assert.Equal(AttemptId, headers["Idempotency-Key"]);
         Assert.Equal("L1", body!.Value.GetProperty("leadId").GetString());
         Assert.Equal("pc-abc", body.Value.GetProperty("deviceCode").GetString());
         Assert.Equal("R3CN123", body.Value.GetProperty("deviceSerial").GetString());
@@ -171,12 +176,12 @@ public class ApiClientLeadsTests
     {
         var (crm, client) = await LoggedInAsync();
         using var _ = crm;
-        crm.Set("POST", "/api/v1/call-attempts/A1/cancel", 200,
-            new { ok = true, attemptId = "A1" });
+        crm.Set("POST", $"/api/v1/call-attempts/{AttemptId}/cancel", 200,
+            new { ok = true, attemptId = AttemptId });
 
-        await client.CancelCallAttemptAsync("A1");
+        await client.CancelCallAttemptAsync(AttemptId);
 
-        Assert.Equal("/api/v1/call-attempts/A1/cancel", crm.Last.Path);
+        Assert.Equal($"/api/v1/call-attempts/{AttemptId}/cancel", crm.Last.Path);
     }
 
     [Fact]
@@ -190,11 +195,11 @@ public class ApiClientLeadsTests
             lead = new { id = "L1", status = "CALLBACK", nextCallAt = "2026-07-06T14:30:00+09:00" },
         });
         var res = await client.LogCallAsync("L1", "CALLBACK", 154, "재상담 원함",
-            "2026-07-06T14:30:00+09:00", "key-1");
+            "2026-07-06T14:30:00+09:00", CallbackKey);
         Assert.True(res.Ok);
         Assert.Equal("CALLBACK", res.Lead.Status);
         var (_, _, headers, body) = crm.Last;
-        Assert.Equal("key-1", headers["Idempotency-Key"]);
+        Assert.Equal(CallbackKey, headers["Idempotency-Key"]);
         Assert.Equal("CALLBACK", body!.Value.GetProperty("resultCode").GetString());
         Assert.Equal(154, body.Value.GetProperty("talkSeconds").GetInt32());
         Assert.Equal("재상담 원함", body.Value.GetProperty("memo").GetString());
@@ -212,7 +217,7 @@ public class ApiClientLeadsTests
             ok = true,
             lead = new { id = "L1", status = "APPOINTMENT", nextCallAt = (string?)null },
         });
-        await client.LogCallAsync("L1", "APPOINTMENT", 90, null, null, "key-appt",
+        await client.LogCallAsync("L1", "APPOINTMENT", 90, null, null, AppointmentKey,
             "2026-07-06T11:00:00+09:00");
         var body = crm.Last.Body!.Value;
         Assert.Equal("APPOINTMENT", body.GetProperty("resultCode").GetString());
@@ -224,20 +229,69 @@ public class ApiClientLeadsTests
     {
         var (crm, client) = await LoggedInAsync();
         using var _ = crm;
-        crm.Set("POST", "/api/v1/call-attempts/A1/result", 200, new
+        crm.Set("POST", $"/api/v1/call-attempts/{AttemptId}/result", 200, new
         {
             ok = true,
-            attemptId = "A1",
+            attemptId = AttemptId,
             lead = new { id = "L1", status = "NOANSWER", nextCallAt = (string?)null },
         });
 
         CallResponse response = await client.LogCallAttemptAsync(
-            "A1", "NOANSWER", 18, "부재", null);
+            AttemptId, "NOANSWER", 18, "부재", null);
 
         Assert.True(response.Ok);
-        Assert.Equal("/api/v1/call-attempts/A1/result", crm.Last.Path);
+        Assert.Equal($"/api/v1/call-attempts/{AttemptId}/result", crm.Last.Path);
         Assert.False(crm.Last.Headers.ContainsKey("Idempotency-Key"));
         Assert.Equal(18, crm.Last.Body!.Value.GetProperty("talkSeconds").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("CALLBACK", "2026-08-04T14:30:00+09:00", null)]
+    [InlineData("APPOINTMENT", null, "2026-08-04T14:30:00+09:00")]
+    public async Task LogCallAttempt_SendsOnlyDateAllowedForResult(
+        string resultCode,
+        string? callbackAt,
+        string? appointmentAt)
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", $"/api/v1/call-attempts/{AttemptId}/result", 200, new
+        {
+            ok = true,
+            attemptId = AttemptId,
+            lead = new { id = "L1", status = resultCode, nextCallAt = (string?)null },
+        });
+
+        await client.LogCallAttemptAsync(
+            AttemptId, resultCode, 60, null, callbackAt, appointmentAt);
+
+        var body = crm.Last.Body!.Value;
+        Assert.Equal(resultCode, body.GetProperty("resultCode").GetString());
+        if (resultCode == "CALLBACK")
+        {
+            Assert.Equal(callbackAt, body.GetProperty("callbackAt").GetString());
+            Assert.False(body.TryGetProperty(
+                "appointmentAt", out JsonElement ignoredAppointment));
+        }
+        else
+        {
+            Assert.Equal(JsonValueKind.Null, body.GetProperty("callbackAt").ValueKind);
+            Assert.Equal(appointmentAt, body.GetProperty("appointmentAt").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task LogCallAttempt_InvalidConditionalDate_FailsBeforeHttpRequest()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        int requestsBefore = crm.Requests.Count;
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(() =>
+            client.LogCallAttemptAsync(AttemptId, "CALLBACK", 60, null, null));
+
+        Assert.Equal("VALIDATION", error.Code);
+        Assert.Equal(requestsBefore, crm.Requests.Count);
     }
 
     [Fact]
@@ -248,7 +302,30 @@ public class ApiClientLeadsTests
         crm.Set("POST", "/api/v1/leads/L1/call", 423,
             new { error = new { code = "NIGHT_BLOCKED", message = "야간에는 발신할 수 없습니다." } });
         await Assert.ThrowsAsync<NightBlockedException>(
-            () => client.LogCallAsync("L1", "NOANSWER", 0, null, null, "key-2"));
+            () => client.LogCallAsync("L1", "NOANSWER", 0, null, null, NoAnswerKey));
+    }
+
+    [Fact]
+    public async Task StartCallAttempt_DncBlocked423_ThrowsDedicatedException()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/call-attempts", 423, new
+        {
+            error = new
+            {
+                code = "DNC_BLOCKED",
+                message = "수신거부 등록 번호에는 발신할 수 없습니다.",
+            },
+        });
+
+        DncBlockedException error = await Assert.ThrowsAsync<DncBlockedException>(() =>
+            client.StartCallAttemptAsync("L1", "pc-abc", "R3CN123", AttemptId));
+
+        Assert.Equal(423, error.HttpStatus);
+        Assert.Equal("DNC_BLOCKED", error.Code);
+        Assert.Equal("수신거부 고객 — 발신 불가, 큐를 새로고침하세요",
+            DncBlockedException.UserMessage);
     }
 
     [Fact]
@@ -324,7 +401,11 @@ public class ApiClientLeadsTests
     {
         var (crm, client) = await LoggedInAsync();
         using var _ = crm;
-        crm.Set("POST", "/api/v1/devices/heartbeat", 204, null);
+        crm.Set("POST", "/api/v1/devices/heartbeat", 200, new
+        {
+            ok = true,
+            serverTime = "2026-08-03T17:20:00+09:00",
+        });
         await client.HeartbeatAsync("pc-abc", "2.2.0", adbConnected: true, lastError: "last");
         var (_, path, headers, body) = crm.Last;
         Assert.Equal("/api/v1/devices/heartbeat", path);

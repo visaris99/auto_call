@@ -5,6 +5,7 @@ namespace Tests;
 
 public class PendingCallQueueTests : IDisposable
 {
+    private const string AttemptId = "2f1e8918-8dc3-4aef-ab97-a4513ca0f649";
     private readonly string _dir = Directory.CreateTempSubdirectory("pending").FullName;
     private string QueuePath => Path.Combine(_dir, "pending.json");
 
@@ -58,10 +59,10 @@ public class PendingCallQueueTests : IDisposable
     {
         var q = new PendingCallQueue(QueuePath);
         q.Add(new PendingCall("k1", "L1", "NOANSWER", 20, null, null,
-            AttemptId: "attempt-1"));
+            AttemptId: AttemptId));
 
         PendingCall item = Assert.Single(new PendingCallQueue(QueuePath).Items);
-        Assert.Equal("attempt-1", item.AttemptId);
+        Assert.Equal(AttemptId, item.AttemptId);
     }
 
     [Fact]
@@ -69,20 +70,20 @@ public class PendingCallQueueTests : IDisposable
     {
         using var crm = new MockCrm();
         ApiClientTests.SetLoginOk(crm);
-        crm.Set("POST", "/api/v1/call-attempts/attempt-1/result", 200, new
+        crm.Set("POST", $"/api/v1/call-attempts/{AttemptId}/result", 200, new
         {
             ok = true,
-            attemptId = "attempt-1",
+            attemptId = AttemptId,
             lead = new { id = "L1", status = "NOANSWER", nextCallAt = (string?)null },
         });
         var client = new ApiClient(crm.Url);
         await client.LoginAsync("hong", "pw");
         var q = new PendingCallQueue(QueuePath);
         q.Add(new PendingCall("k1", "L1", "NOANSWER", 20, null, null,
-            AttemptId: "attempt-1"));
+            AttemptId: AttemptId));
 
         Assert.Equal((1, 0), await q.FlushAsync(client));
-        Assert.Equal("/api/v1/call-attempts/attempt-1/result", crm.Last.Path);
+        Assert.Equal($"/api/v1/call-attempts/{AttemptId}/result", crm.Last.Path);
     }
 
     [Fact]

@@ -61,11 +61,47 @@ public class QueueLogicTests
     }
 
     [Fact]
-    public void CallbackIso_TodayAndTomorrow()
+    public void CallbackIso_UsesTodayAndRejectsPastTime()
     {
         Assert.Equal("2026-07-05T14:30:00+09:00", QueueLogic.CallbackIso("14:30", Now));
-        Assert.Equal("2026-07-06T09:00:00+09:00", QueueLogic.CallbackIso("09:00", Now)); // 지난 시각 → 내일
+        Assert.Null(QueueLogic.CallbackIso("09:00", Now));
         Assert.Equal("2026-07-05T14:30:00+09:00", QueueLogic.LocalTimeIso("14:30", Now));
+    }
+
+    [Fact]
+    public void ScheduledLocalTime_IncludesExplicitDate()
+    {
+        ScheduledTimeResult tomorrow = QueueLogic.ScheduledLocalTime(
+            new DateOnly(2026, 7, 6), "09:00", Now);
+        ScheduledTimeResult later = QueueLogic.ScheduledLocalTime(
+            new DateOnly(2026, 7, 31), "10:00", Now);
+
+        Assert.Equal("2026-07-06T09:00:00+09:00", tomorrow.Iso);
+        Assert.Equal("2026-07-31T10:00:00+09:00", later.Iso);
+        Assert.True(tomorrow.IsValid);
+        Assert.True(later.IsValid);
+    }
+
+    [Fact]
+    public void ScheduledLocalTime_DistinguishesMissingInvalidAndPast()
+    {
+        Assert.Equal(ScheduledTimeError.MissingDate,
+            QueueLogic.ScheduledLocalTime(null, "14:30", Now).Error);
+        Assert.Equal(ScheduledTimeError.InvalidTime,
+            QueueLogic.ScheduledLocalTime(new DateOnly(2026, 7, 5), "25:00", Now).Error);
+        Assert.Equal(ScheduledTimeError.NotFuture,
+            QueueLogic.ScheduledLocalTime(new DateOnly(2026, 7, 5), "09:00", Now).Error);
+        Assert.Equal(ScheduledTimeError.NotFuture,
+            QueueLogic.ScheduledLocalTime(new DateOnly(2026, 7, 5), "10:00", Now).Error);
+    }
+
+    [Theory]
+    [InlineData("2026-07-05T14:30:00+09:00", "오늘 14:30")]
+    [InlineData("2026-07-06T09:00:00+09:00", "내일 09:00")]
+    [InlineData("2026-07-31T10:00:00+09:00", "07/31 10:00")]
+    public void FormatCallbackTime_UsesRelativeDateLabels(string iso, string expected)
+    {
+        Assert.Equal(expected, QueueLogic.FormatCallbackTime(iso, Now));
     }
 
     [Fact]
@@ -106,54 +142,39 @@ public class QueueLogicTests
         Assert.Equal(expected, QueueLogic.FormatPhone(raw));
     }
 
-    [Theory]
-    [InlineData("NEW", true, true)]
-    [InlineData("ASSIGNED", true, true)]
-    [InlineData("NOANSWER", true, true)]
-    [InlineData("CALLBACK", true, true)]
-    [InlineData("INTERESTED", true, true)]
-    [InlineData("CONSULT", true, true)]
-    [InlineData("NOANSWER", false, false)]
-    [InlineData("APPOINTMENT", true, false)]
-    [InlineData("HANDOFF", true, false)]
-    [InlineData("RISK", true, false)]
-    [InlineData("WON", true, false)]
-    [InlineData("REJECT", true, false)]
-    [InlineData("DNC", true, false)]
-    public void CanRedialAfterSavedStatus_RequiresPersistedCallableLead(
-        string leadStatus, bool persisted, bool expected)
+    [Fact]
+    public void FirstSelectableLead_SkipsCompletedLead()
     {
-        Assert.Equal(expected, QueueLogic.CanRedialAfterSavedStatus(leadStatus, persisted));
+        LeadItem[] items = { Lead("saved"), Lead("next") };
+        Assert.Equal("next",
+            QueueLogic.FirstSelectableLead(items, new HashSet<string> { "saved" })?.Id);
     }
 
     [Fact]
-    public void CanEnableSave_RequiresResultSelected()
+    public void FirstSelectableLead_SingleCompletedLeadDoesNotReselect()
     {
-        Assert.False(QueueLogic.CanEnableSave(null, "", Now));
-        Assert.False(QueueLogic.CanEnableSave(null, "14:30", Now));
+        LeadItem[] items = { Lead("saved") };
+        Assert.Null(QueueLogic.FirstSelectableLead(
+            items, new HashSet<string> { "saved" }));
+    }
+
+    [Fact]
+    public void FirstSelectableLead_AllowsExplicitlyClearedCompletion()
+    {
+        LeadItem[] items = { Lead("saved") };
+        var completed = new HashSet<string> { "saved" };
+        completed.Remove("saved");
+        Assert.Equal("saved", QueueLogic.FirstSelectableLead(items, completed)?.Id);
     }
 
     [Theory]
-    [InlineData("WON")]
-    [InlineData("NOANSWER")]
-    [InlineData("REJECT")]
-    [InlineData("HANDOFF")]
-    [InlineData("RISK")]
-    public void CanEnableSave_NonTimeResults_IgnoreCallbackText(string result)
+    [InlineData("홍길동", "홍*동")]
+    [InlineData("김철수상담", "김***담")]
+    [InlineData("김민수", "김*수")]
+    [InlineData("김", "*")]
+    [InlineData("", "(이름없음)")]
+    public void MaskName(string name, string expected)
     {
-        Assert.True(QueueLogic.CanEnableSave(result, "", Now));
-        Assert.True(QueueLogic.CanEnableSave(result, "garbage", Now));
-    }
-
-    [Theory]
-    [InlineData("CALLBACK")]
-    [InlineData("APPOINTMENT")]
-    public void CanEnableSave_TimeResults_RequireValidTime(string result)
-    {
-        Assert.False(QueueLogic.CanEnableSave(result, "", Now));
-        Assert.False(QueueLogic.CanEnableSave(result, "  ", Now));
-        Assert.False(QueueLogic.CanEnableSave(result, "abc", Now));
-        Assert.False(QueueLogic.CanEnableSave(result, "25:00", Now));
-        Assert.True(QueueLogic.CanEnableSave(result, "14:30", Now));
+        Assert.Equal(expected, QueueLogic.MaskName(name));
     }
 }

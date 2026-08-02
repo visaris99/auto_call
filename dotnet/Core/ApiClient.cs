@@ -24,26 +24,26 @@ public sealed class ApiClient
     private async Task<JsonElement?> RequestAsync(HttpMethod method, string path,
         object? body = null, IDictionary<string, string>? headers = null, bool auth = true)
     {
-        var req = new HttpRequestMessage(method, $"{BaseUrl}/api/v1{path}");
-        if (auth)
-        {
-            if (_token is null)
-                throw new AuthException("UNAUTHENTICATED", "로그인이 필요합니다.", 401);
-            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
-        }
-        if (headers != null)
-            foreach (var (key, value) in headers)
-                req.Headers.TryAddWithoutValidation(key, value);
-        if (body != null)
-            req.Content = new StringContent(
-                JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
-
         HttpResponseMessage res;
         try
         {
+            using var req = new HttpRequestMessage(method, $"{BaseUrl}/api/v1{path}");
+            if (auth)
+            {
+                if (_token is null)
+                    throw new AuthException("UNAUTHENTICATED", "로그인이 필요합니다.", 401);
+                req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
+            }
+            if (headers != null)
+                foreach (var (key, value) in headers)
+                    req.Headers.TryAddWithoutValidation(key, value);
+            if (body != null)
+                req.Content = new StringContent(
+                    JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
             res = await _http.SendAsync(req).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException
+                                   or InvalidOperationException)
         {
             throw new NetworkException();
         }
@@ -84,6 +84,7 @@ public sealed class ApiClient
     {
         "MFA_REQUIRED" => new MfaRequiredException(code, message, status),
         "NIGHT_BLOCKED" => new NightBlockedException(code, message, status),
+        "DNC_BLOCKED" => new DncBlockedException(code, message, status),
         "UNAUTHENTICATED" when status == 401 => new AuthException(code, message, status),
         _ => new ApiException(code, message, status),
     };
@@ -206,6 +207,7 @@ public sealed class ApiClient
         string deviceSerial,
         string attemptId)
     {
+        attemptId = ApiContractValidator.RequireUuid4(attemptId, "Idempotency-Key 헤더");
         var data = await RequestAsync(HttpMethod.Post, "/call-attempts",
             new { leadId, deviceCode, deviceSerial, channel = "ADB" },
             new Dictionary<string, string> { ["Idempotency-Key"] = attemptId })
@@ -215,6 +217,7 @@ public sealed class ApiClient
 
     public async Task CancelCallAttemptAsync(string attemptId)
     {
+        attemptId = ApiContractValidator.RequireUuid4(attemptId, "attemptId");
         await RequestAsync(HttpMethod.Post,
             $"/call-attempts/{Uri.EscapeDataString(attemptId)}/cancel")
             .ConfigureAwait(false);
@@ -224,6 +227,8 @@ public sealed class ApiClient
         int talkSeconds, string? memo, string? callbackAt, string idempotencyKey,
         string? appointmentAt = null)
     {
+        idempotencyKey = ApiContractValidator.RequireUuid4(
+            idempotencyKey, "Idempotency-Key 헤더");
         var body = CallResultBody(resultCode, talkSeconds, memo, callbackAt, appointmentAt);
         var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/call", body,
             new Dictionary<string, string> { ["Idempotency-Key"] = idempotencyKey })
@@ -234,6 +239,7 @@ public sealed class ApiClient
     public async Task<CallResponse> LogCallAttemptAsync(string attemptId, string resultCode,
         int talkSeconds, string? memo, string? callbackAt, string? appointmentAt = null)
     {
+        attemptId = ApiContractValidator.RequireUuid4(attemptId, "attemptId");
         var body = CallResultBody(resultCode, talkSeconds, memo, callbackAt, appointmentAt);
         var data = await RequestAsync(HttpMethod.Post,
             $"/call-attempts/{Uri.EscapeDataString(attemptId)}/result", body)
@@ -244,6 +250,8 @@ public sealed class ApiClient
     private static Dictionary<string, object?> CallResultBody(string resultCode,
         int talkSeconds, string? memo, string? callbackAt, string? appointmentAt)
     {
+        CallResultPayloadValidator.Validate(
+            resultCode, talkSeconds, memo, callbackAt, appointmentAt);
         var body = new Dictionary<string, object?>
         {
             ["resultCode"] = resultCode,

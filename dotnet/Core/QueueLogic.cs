@@ -4,6 +4,19 @@ using System.Text;
 
 namespace Core;
 
+public enum ScheduledTimeError
+{
+    None,
+    MissingDate,
+    InvalidTime,
+    NotFuture,
+}
+
+public sealed record ScheduledTimeResult(string? Iso, ScheduledTimeError Error)
+{
+    public bool IsValid => Error == ScheduledTimeError.None && Iso != null;
+}
+
 public static class QueueLogic
 {
     public static DateTimeOffset? ParseIso(string? value)
@@ -39,24 +52,54 @@ public static class QueueLogic
         return h > 0 ? $"{h}:{m:D2}:{s:D2}" : $"{m:D2}:{s:D2}";
     }
 
-    /// <summary>'14:30' → 오늘(지났으면 내일)의 ISO 문자열. 형식 오류는 null.</summary>
+    /// <summary>'14:30' → 오늘의 ISO 문자열. 형식 오류이거나 이미 지난 시간이면 null.</summary>
     public static string? LocalTimeIso(string hhmm, DateTimeOffset now)
     {
+        return ScheduledLocalTime(DateOnly.FromDateTime(now.Date), hhmm, now).Iso;
+    }
+
+    public static ScheduledTimeResult ScheduledLocalTime(
+        DateOnly? date,
+        string hhmm,
+        DateTimeOffset now)
+    {
+        if (date == null)
+            return new ScheduledTimeResult(null, ScheduledTimeError.MissingDate);
         var parts = hhmm.Trim().Split(':');
         if (parts.Length != 2
             || !int.TryParse(parts[0], out int hour)
             || !int.TryParse(parts[1], out int minute))
-            return null;
+            return new ScheduledTimeResult(null, ScheduledTimeError.InvalidTime);
         if (hour is < 0 or > 23 || minute is < 0 or > 59)
-            return null;
-        var target = new DateTimeOffset(now.Year, now.Month, now.Day, hour, minute, 0, now.Offset);
+            return new ScheduledTimeResult(null, ScheduledTimeError.InvalidTime);
+        DateOnly selected = date.Value;
+        var target = new DateTimeOffset(
+            selected.Year, selected.Month, selected.Day, hour, minute, 0, now.Offset);
         if (target <= now)
-            target = target.AddDays(1);
-        return target.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+            return new ScheduledTimeResult(null, ScheduledTimeError.NotFuture);
+        return new ScheduledTimeResult(
+            target.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture),
+            ScheduledTimeError.None);
     }
 
     public static string? CallbackIso(string hhmm, DateTimeOffset now) =>
         LocalTimeIso(hhmm, now);
+
+    public static string FormatCallbackTime(string? iso, DateTimeOffset now)
+    {
+        DateTimeOffset? parsed = ParseIso(iso);
+        if (parsed == null)
+            return "";
+        DateTimeOffset local = parsed.Value.ToOffset(now.Offset);
+        DateOnly targetDate = DateOnly.FromDateTime(local.Date);
+        DateOnly today = DateOnly.FromDateTime(now.Date);
+        string prefix = targetDate == today
+            ? "오늘"
+            : targetDate == today.AddDays(1)
+                ? "내일"
+                : local.ToString("MM/dd", CultureInfo.InvariantCulture);
+        return $"{prefix} {local:HH:mm}";
+    }
 
     /// <summary>출력 가능한 ASCII만 남긴다 — 비밀번호/MFA 필드의 한글 IME 입력 차단용.</summary>
     public static string AsciiOnly(string text)
@@ -97,17 +140,20 @@ public static class QueueLogic
         return digits;
     }
 
-    public static bool CanRedialAfterSavedStatus(string leadStatus, bool persisted) =>
-        persisted && leadStatus is "NEW" or "ASSIGNED" or "NOANSWER" or "CALLBACK"
-            or "INTERESTED" or "CONSULT";
+    public static LeadItem? FirstSelectableLead(
+        IEnumerable<LeadItem> items,
+        IReadOnlySet<string> completedLeadIds) =>
+        items.FirstOrDefault(item => !completedLeadIds.Contains(item.Id));
 
-    /// <summary>저장 버튼 활성화 조건 — 결과 미선택이거나 CALLBACK/APPOINTMENT의 예약 시간이
-    /// 비어있거나 형식이 잘못되면 비활성화한다.</summary>
-    public static bool CanEnableSave(string? selectedResult, string callbackText, DateTimeOffset now)
+    public static string MaskName(string? name)
     {
-        if (selectedResult == null)
-            return false;
-        bool needsTime = selectedResult is "CALLBACK" or "APPOINTMENT";
-        return !needsTime || LocalTimeIso(callbackText, now) != null;
+        string value = string.IsNullOrWhiteSpace(name) ? "(이름없음)" : name.Trim();
+        if (value == "(이름없음)")
+            return value;
+        if (value.Length == 1)
+            return "*";
+        if (value.Length == 2)
+            return $"{value[0]}*";
+        return $"{value[0]}{new string('*', value.Length - 2)}{value[^1]}";
     }
 }

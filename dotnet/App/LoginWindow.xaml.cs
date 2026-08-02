@@ -121,27 +121,48 @@ public partial class LoginWindow : Window
     private void ServerSettings_Click(object sender, RoutedEventArgs e)
     {
         var box = new TextBox { Text = _client.BaseUrl, Height = 32, Margin = new Thickness(0, 8, 0, 0) };
+        var error = new TextBlock
+        {
+            Foreground = (System.Windows.Media.Brush)FindResource("B.Danger"),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 18,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
         var ok = new Button
         {
-            Content = "저장", Height = 32, Margin = new Thickness(0, 12, 0, 0),
+            Content = "저장", Height = 32, Margin = new Thickness(0, 6, 0, 0),
             Style = (Style)FindResource("PrimaryBtn"),
         };
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock { Text = "CRM 서버 주소:" });
         panel.Children.Add(box);
+        panel.Children.Add(error);
         panel.Children.Add(ok);
         var dialog = new Window
         {
-            Title = "서버 주소", Width = 420, Height = 170, Owner = this,
+            Title = "서버 주소", Width = 420, Height = 205, Owner = this,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize, Content = panel,
             Background = (System.Windows.Media.Brush)FindResource("B.Background"),
             FontFamily = (System.Windows.Media.FontFamily)FindResource("AppFont"),
         };
-        ok.Click += (_, _) => dialog.DialogResult = true;
-        if (dialog.ShowDialog() == true && box.Text.Trim().Length > 0)
+        string? normalizedUrl = null;
+        ok.Click += (_, _) =>
         {
-            _client.BaseUrl = box.Text.Trim().TrimEnd('/');
+            if (!AppConfig.TryNormalizeServerUrl(box.Text, out string normalized))
+            {
+                error.Text = "올바른 서버 주소를 입력하세요. 예: crm.example.com";
+                box.Focus();
+                box.SelectAll();
+                return;
+            }
+            normalizedUrl = normalized;
+            dialog.DialogResult = true;
+        };
+        if (dialog.ShowDialog() == true && normalizedUrl != null)
+        {
+            _client.BaseUrl = normalizedUrl;
             _config.ServerUrl = _client.BaseUrl;
             _config.Save();
         }

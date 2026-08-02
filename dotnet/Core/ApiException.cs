@@ -40,3 +40,12 @@ public sealed class NightBlockedException : ApiException
     public NightBlockedException(string code, string message, int httpStatus)
         : base(code, message, httpStatus) { }
 }
+
+/// <summary>수신거부(DNC) 고객 발신 차단.</summary>
+public sealed class DncBlockedException : ApiException
+{
+    public const string UserMessage = "수신거부 고객 — 발신 불가, 큐를 새로고침하세요";
+
+    public DncBlockedException(string code, string message, int httpStatus)
+        : base(code, message, httpStatus) { }
+}

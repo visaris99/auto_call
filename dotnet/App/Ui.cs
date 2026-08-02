@@ -6,7 +6,7 @@ namespace MilestoneDialer;
 
 public static class Ui
 {
-    public const string Version = "2.5.0";
+    public const string Version = "2.6.0";
 
     private static readonly Dictionary<string, Brush> Cache = new();
 
@@ -33,9 +33,9 @@ public static class Ui
         ["REJECT"] = "거절",
         ["DNC"] = "수신거부",
         ["RECYCLE"] = "재활용",
-        ["APPOINTMENT"] = "예약",
-        ["HANDOFF"] = "이관",
-        ["RISK"] = "리스크",
+        ["APPOINTMENT"] = "상담예약",
+        ["HANDOFF"] = "영업이관",
+        ["RISK"] = "민원위험",
     };
 
     public static string LabelFor(string status) => Labels.GetValueOrDefault(status, status);
@@ -53,12 +53,7 @@ public static class Ui
 
     /// <summary>CRM 콜 결과 10종 + 단축키 1~9/0.</summary>
     public static readonly (string Code, string Label, string Key)[] Results =
-    {
-        ("NOANSWER", "부재", "1"), ("CALLBACK", "콜백예약", "2"), ("INTERESTED", "가망", "3"),
-        ("CONSULT", "상담중", "4"), ("WON", "가입", "5"), ("REJECT", "거절", "6"),
-        ("DNC", "수신거부", "7"), ("APPOINTMENT", "예약", "8"), ("HANDOFF", "이관", "9"),
-        ("RISK", "리스크", "0"),
-    };
+        CallResultCatalog.Results;
 }
 
 /// <summary>큐 ListBox 한 행 — 표시에 필요한 값을 미리 계산해 바인딩.</summary>
@@ -81,7 +76,6 @@ public sealed class LeadRow
         StatusLabel = Ui.LabelFor(item.Status);
         (BadgeBg, BadgeFg) = Ui.StatusColors(item.Status);
         RowBrush = Due ? Ui.Brush("#F6EFBE") : Ui.Brush("#FFFFFF");
-        var dt = QueueLogic.ParseIso(item.NextCallAt);
-        TimeText = dt?.ToLocalTime().ToString("HH:mm") ?? "";
+        TimeText = QueueLogic.FormatCallbackTime(item.NextCallAt, now);
     }
 }

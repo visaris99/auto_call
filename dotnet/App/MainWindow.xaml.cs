@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly PendingCallQueue _pending = new();
     private readonly CallSessionCoordinator _callSession = new();
     private readonly HashSet<string> _completedLeadIds;
+    private readonly bool _serverInsightsEnabled;
 
     private List<LeadItem> _leads = new();
     private LeadItem? _current;
@@ -25,7 +26,7 @@ public partial class MainWindow : Window
     private int _todayDials;
     private int _todayWon;
     private string? _selectedResult;
-    private readonly HashSet<string> _notified = new();
+    private readonly CallbackNotificationTracker _callbackNotifications = new();
     private readonly Dictionary<string, ToggleButton> _resultButtons = new();
     private readonly Dictionary<string, ToggleButton> _filterChips = new();
     private string _filter = "ALL";
@@ -33,25 +34,28 @@ public partial class MainWindow : Window
     private bool _suppressDeviceSelection;
     private bool _sawOffhook;            // 통화 종료 자동 감지: 통화중(2) 관측 후 0이면 종료
     private bool _pollingCallState;
-    private bool _serverStats;           // /me/today 사용 가능 여부
+    private bool _serverStats;           // 기능 게이트가 켜진 /me/today 응답 사용 여부
     private int _historyToken;
     private int _contactToken;
     private int _clipboardToken;
     private string? _revealedLeadId;
     private string? _revealedPhone;
-    private string? _downloadUrl;
     private bool _adbConnected;
     private bool _sendingHeartbeat;
     private bool _refreshingDevices;
     private bool _refreshingQueue;
+    private bool _queueLoaded;
+    private bool _revealingContact;
     private bool _resolvingManualCall;
     private bool _flushingPending;
     private bool _authLost;
     private bool _waitingForExpiredSessionResult;
     private bool _closing;
     private bool _allowClose;
+    private bool _manualEndConfirmed;
     private string? _adbSerial;
     private string? _lastError;
+    private string? _notificationLeadId;
     private System.Windows.Forms.NotifyIcon? _tray;
 
     /// <summary>큐 필터 정의: (키, 라벨, 해당 상태들).</summary>
@@ -67,19 +71,24 @@ public partial class MainWindow : Window
     private const int QueueFetchLimit = 500;
 
     private static bool IsSecondaryResult(string code) =>
-        code is "APPOINTMENT" or "HANDOFF" or "RISK";
+        CallResultCatalog.IsSpecial(code);
 
     private readonly DispatcherTimer _tickTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _queueTimer = new() { Interval = TimeSpan.FromSeconds(60) };
     private readonly DispatcherTimer _adbTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly DispatcherTimer _heartbeatTimer = new() { Interval = TimeSpan.FromSeconds(60) };
+    private readonly DispatcherTimer _bannerTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly DispatcherTimer _saveHintTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+
+    internal bool IsCallSessionIdle => _callSession.State == CallSessionState.Idle;
 
     public MainWindow(ApiClient client, AppConfig config)
     {
         InitializeComponent();
         _client = client;
         _config = config;
+        _serverInsightsEnabled = AppConfig.IsServerInsightsEnabled();
         _adbSerial = string.IsNullOrWhiteSpace(config.AdbSerial) ? null : config.AdbSerial;
         _completedLeadIds = new HashSet<string>(
             _pending.Items.Select(item => item.LeadId), StringComparer.Ordinal);
@@ -104,6 +113,8 @@ public partial class MainWindow : Window
                 Visible = true,
                 Text = "Milestone Dialer",
             };
+            _tray.BalloonTipClicked += (_, _) =>
+                Dispatcher.BeginInvoke(ActivateNotificationLead);
         }
         catch (Exception ex) when (ex is System.IO.IOException or ArgumentException)
         {
@@ -114,12 +125,27 @@ public partial class MainWindow : Window
         {
             if (_callWatch != null)
                 TimerText.Text = QueueLogic.FormatSeconds((int)_callWatch.Elapsed.TotalSeconds);
+            CheckCallbackDue();
+            if (_callSession.State == CallSessionState.Ended
+                && CallWorkflowPolicy.NeedsScheduledTime(_selectedResult))
+                UpdateCallControls();
             await PollCallStateAsync();
         };
         _queueTimer.Tick += async (_, _) => await RefreshQueueAsync();
         _adbTimer.Tick += async (_, _) => await RefreshAdbDevicesAsync();
         _flushTimer.Tick += async (_, _) => await FlushPendingAsync();
         _heartbeatTimer.Tick += async (_, _) => await SendHeartbeatAsync();
+        _bannerTimer.Tick += (_, _) =>
+        {
+            _bannerTimer.Stop();
+            UpdateBanner();
+        };
+        _saveHintTimer.Tick += (_, _) =>
+        {
+            _saveHintTimer.Stop();
+            SaveHintText.Text = "";
+            SaveHintText.Visibility = Visibility.Collapsed;
+        };
         _tickTimer.Start();
         _queueTimer.Start();
         _adbTimer.Start();
@@ -128,7 +154,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _tickTimer.Stop(); _queueTimer.Stop(); _adbTimer.Stop(); _flushTimer.Stop();
-            _heartbeatTimer.Stop();
+            _heartbeatTimer.Stop(); _bannerTimer.Stop(); _saveHintTimer.Stop();
             _tray?.Dispose();
         };
 
@@ -137,7 +163,8 @@ public partial class MainWindow : Window
             await RefreshAdbDevicesAsync();
             await SendHeartbeatAsync();
             await RefreshQueueAsync();
-            await RefreshTodayAsync();
+            if (_serverInsightsEnabled)
+                await RefreshTodayAsync();
             await CheckVersionAsync();
         };
     }
@@ -194,10 +221,11 @@ public partial class MainWindow : Window
 
     // ---------- 알림 ----------
 
-    private void Notify(string title, string message)
+    private void Notify(string title, string message, string leadId)
     {
         try
         {
+            _notificationLeadId = leadId;
             _tray?.ShowBalloonTip(5000, title, message, System.Windows.Forms.ToolTipIcon.Info);
             System.Media.SystemSounds.Exclamation.Play();
         }
@@ -205,6 +233,24 @@ public partial class MainWindow : Window
         {
             // 알림 실패는 무시
         }
+    }
+
+    private void ActivateNotificationLead()
+    {
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Show();
+        Activate();
+        if (_notificationLeadId == null || _callSession.LocksLeadSelection)
+            return;
+        LeadItem? lead = _leads.FirstOrDefault(item => item.Id == _notificationLeadId);
+        if (lead == null)
+            return;
+        if (!FilteredLeads().Any(item => item.Id == lead.Id))
+            SelectFilter("ALL");
+        Select(lead);
+        if (QueueList.SelectedItem != null)
+            QueueList.ScrollIntoView(QueueList.SelectedItem);
     }
 
     // ---------- 상단 표시 ----------
@@ -215,9 +261,11 @@ public partial class MainWindow : Window
             TodayText.Text = $"오늘: 발신 {_todayDials} · 가입 {_todayWon}";
     }
 
-    /// <summary>서버 집계(/me/today) — 미구현이면 세션 카운터 유지.</summary>
+    /// <summary>기능 게이트가 켜진 경우에만 서버 집계(/me/today)를 사용한다.</summary>
     private async Task RefreshTodayAsync()
     {
+        if (!_serverInsightsEnabled)
+            return;
         try
         {
             var stats = await _client.TodayAsync();
@@ -300,6 +348,17 @@ public partial class MainWindow : Window
                         : "연결된 ADB 장치가 없습니다.";
             AdbDot.ToolTip = detail;
             AdbDot.Text = selected == null ? "● ADB 확인" : "● ADB";
+            AdbHelpText.Text = selected != null
+                ? $"ADB 연결됨 · {selected.Serial}"
+                : devices.Any(device => device.State.Equals(
+                    "unauthorized", StringComparison.OrdinalIgnoreCase))
+                    ? "휴대폰 화면의 USB 디버깅 허용을 눌러주세요"
+                    : ready.Count > 1
+                        ? "발신에 사용할 ADB 장치를 선택해주세요"
+                        : devices.Count == 0
+                            ? "USB 연결 후 개발자 옵션>USB 디버깅 켜기"
+                            : "USB 연결 상태와 ADB 장치를 확인해주세요";
+            AdbHelpText.Foreground = Ui.Brush(selected != null ? "#1A7F4B" : "#B3372C");
             SetAdb(selected != null);
             UpdateCallControls();
         }
@@ -328,6 +387,8 @@ public partial class MainWindow : Window
         _config.AdbSerial = selected.Serial;
         TrySaveConfig();
         SetAdb(true);
+        AdbHelpText.Text = $"ADB 연결됨 · {selected.Serial}";
+        AdbHelpText.Foreground = Ui.Brush("#1A7F4B");
         UpdateCallControls();
     }
 
@@ -373,25 +434,24 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void FlashBanner(string message)
+    private void FlashBanner(string message)
     {
         BannerText.Text = message;
-        await Task.Delay(5000);
-        UpdateBanner();
+        _bannerTimer.Stop();
+        _bannerTimer.Start();
     }
 
     /// <summary>저장 실행 조건(Ended 상태)에 어긋난 F3/저장 시도를 안내하는 인라인 메시지.</summary>
-    private async void FlashSaveHint(string message)
+    private void FlashSaveHint(string message)
     {
         SaveHintText.Text = message;
         SaveHintText.Visibility = Visibility.Visible;
-        await Task.Delay(4000);
-        if (SaveHintText.Text == message)
-        {
-            SaveHintText.Text = "";
-            SaveHintText.Visibility = Visibility.Collapsed;
-        }
+        _saveHintTimer.Stop();
+        _saveHintTimer.Start();
     }
+
+    internal void ShowDeferredUpdateNotice() =>
+        FlashBanner("업데이트는 통화 결과 저장 후 설치됩니다.");
 
     // ---------- 큐 ----------
 
@@ -412,6 +472,7 @@ public partial class MainWindow : Window
             _leads = items
                 .Where(item => callableStatuses.Contains(item.Status))
                 .ToList();
+            _queueLoaded = true;
 
             CallSessionSnapshot? session = _callSession.Current;
             if (session != null)
@@ -420,10 +481,12 @@ public partial class MainWindow : Window
                 if (updated != null)
                     _current = updated;
                 RenderQueue();
+                CheckCallbackDue();
                 return;
             }
 
             RenderQueue();
+            CheckCallbackDue();
             var visible = FilteredLeads();
             if (_current == null || visible.All(x => x.Id != _current.Id))
                 Select(FirstSelectableLead(visible));
@@ -475,8 +538,7 @@ public partial class MainWindow : Window
     }
 
     private LeadItem? FirstSelectableLead(IEnumerable<LeadItem> items) =>
-        items.FirstOrDefault(item => !_completedLeadIds.Contains(item.Id))
-        ?? items.FirstOrDefault();
+        QueueLogic.FirstSelectableLead(items, _completedLeadIds);
 
     private List<LeadItem> FilteredLeads()
     {
@@ -508,15 +570,40 @@ public partial class MainWindow : Window
             _filterChips[key].Content = $"{label} {count}";
         }
 
-        // 콜백 도래 알림은 필터와 무관하게 전체 기준 — 배너 + Windows 알림
-        foreach (var item in _leads.Where(x => QueueLogic.IsCallbackDue(x, now)
-                                               && !_notified.Contains(x.Id)))
+    }
+
+    private void CheckCallbackDue()
+    {
+        if (!_queueLoaded)
+            return;
+        DateTimeOffset now = DateTimeOffset.Now;
+        IReadOnlyList<CallbackNotification> notifications =
+            _callbackNotifications.Check(_leads, now);
+        if (notifications.Any(notification =>
+                notification.Kind == CallbackNotificationKind.Due))
+            RenderQueue();
+
+        foreach (CallbackNotification notification in notifications)
         {
-            _notified.Add(item.Id);
-            var dt = QueueLogic.ParseIso(item.NextCallAt);
-            string message = $"재통화 시간: {item.Name} {dt?.ToLocalTime():HH:mm}";
+            string title;
+            string message;
+            if (notification.Kind == CallbackNotificationKind.StartupSummary)
+            {
+                DateTimeOffset? oldest = QueueLogic.ParseIso(notification.Target.NextCallAt);
+                string oldestText = oldest?.ToOffset(now.Offset).ToString("HH:mm") ?? "--:--";
+                title = "지난 콜백 알림";
+                message = $"지난 콜백 {notification.Count}건 · 가장 오래된 {oldestText}";
+            }
+            else
+            {
+                title = notification.Kind == CallbackNotificationKind.Reminder
+                    ? "콜백 재알림"
+                    : "콜백 알림";
+                message = $"{QueueLogic.MaskName(notification.Target.Name)} · "
+                          + $"{QueueLogic.FormatCallbackTime(notification.Target.NextCallAt, now)}";
+            }
             FlashBanner(message);
-            Notify("재통화 알림", message);
+            Notify(title, message, notification.Target.Id);
         }
     }
 
@@ -533,8 +620,11 @@ public partial class MainWindow : Window
             _suppressSelection = false;
             return;
         }
+        _completedLeadIds.Remove(row.Item.Id);
         if (row.Item.Id != _current?.Id)
             Select(row.Item);
+        else
+            UpdateCallControls();
     }
 
     private void Select(LeadItem? item)
@@ -559,6 +649,8 @@ public partial class MainWindow : Window
             StatusBadge.Visibility = Visibility.Collapsed;
             EditNameBtn.Visibility = Visibility.Collapsed;
             HistoryList.ItemsSource = null;
+            RevealContactBtn.IsEnabled = false;
+            RevealContactBtn.Content = "연락처 보기";
             CopyPhoneBtn.IsEnabled = false;
             _historyToken++;
         }
@@ -566,6 +658,8 @@ public partial class MainWindow : Window
         {
             NameText.Text = string.IsNullOrEmpty(item.Name) ? "(이름없음)" : item.Name;
             PhoneText.Text = item.PhoneMasked;
+            RevealContactBtn.IsEnabled = true;
+            RevealContactBtn.Content = "연락처 보기";
             CopyPhoneBtn.IsEnabled = false;
             var (bg, fg) = Ui.StatusColors(item.Status);
             StatusBadge.Background = bg;
@@ -573,19 +667,33 @@ public partial class MainWindow : Window
             StatusBadgeText.Text = Ui.LabelFor(item.Status);
             StatusBadge.Visibility = Visibility.Visible;
             EditNameBtn.Visibility = Visibility.Visible;
-            string memo = string.IsNullOrEmpty(item.Memo) ? "" : $"리드 메모: {item.Memo}";
+            string memo = string.IsNullOrEmpty(item.Memo)
+                ? "리드 메모 · 고객에게 계속 남음: 없음"
+                : $"리드 메모 · 고객에게 계속 남음: {item.Memo}";
             LeadMemoText.Text = _completedLeadIds.Contains(item.Id)
-                ? $"{memo}{(memo.Length > 0 ? " · " : "")}이번 실행에서 처리 완료"
+                ? $"{memo} · 이번 실행에서 처리 완료"
                 : memo;
-            LoadHistory(item);
-            LoadContact(item, _contactToken);
+            if (_serverInsightsEnabled)
+                LoadHistory(item);
+            else
+                HistoryList.ItemsSource = null;
         }
         UpdateSelectionInList(item);
         UpdateCallControls();
     }
 
-    private async void LoadContact(LeadItem item, int token)
+    private async void RevealContact_Click(object sender, RoutedEventArgs e)
     {
+        if (_current == null || _revealingContact)
+            return;
+        await LoadContactAsync(_current, _contactToken);
+    }
+
+    private async Task LoadContactAsync(LeadItem item, int token)
+    {
+        _revealingContact = true;
+        RevealContactBtn.IsEnabled = false;
+        RevealContactBtn.Content = "확인 중…";
         try
         {
             LeadReveal contact = await _client.RevealLeadAsync(item.Id);
@@ -597,6 +705,7 @@ public partial class MainWindow : Window
                 NameText.Text = contact.Name;
             PhoneText.Text = QueueLogic.FormatPhone(contact.Phone);
             CopyPhoneBtn.IsEnabled = true;
+            RevealContactBtn.Content = "연락처 확인됨";
         }
         catch (AuthException)
         {
@@ -610,7 +719,16 @@ public partial class MainWindow : Window
         catch (ApiException ex)
         {
             _lastError = ex.Message;
-            CopyPhoneBtn.ToolTip = ex.Message;
+            RevealContactBtn.ToolTip = $"{ex.Message} ({ex.Code})";
+        }
+        finally
+        {
+            _revealingContact = false;
+            if (_current?.Id == item.Id && _revealedLeadId != item.Id)
+            {
+                RevealContactBtn.Content = "연락처 보기";
+                RevealContactBtn.IsEnabled = true;
+            }
         }
     }
 
@@ -650,9 +768,15 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>선택 리드의 상담 이력 로드 — 서버 미구현(404)이면 조용히 숨김.</summary>
+    /// <summary>기능 게이트가 켜진 경우에만 선택 리드의 상담 이력을 로드한다.</summary>
     private async void LoadHistory(LeadItem item)
     {
+        if (!_serverInsightsEnabled)
+        {
+            _historyToken++;
+            HistoryList.ItemsSource = null;
+            return;
+        }
         int token = ++_historyToken;
         HistoryList.ItemsSource = null;
         try
@@ -680,10 +804,11 @@ public partial class MainWindow : Window
     {
         if (_current == null)
             return;
-        NameEditBox.Text = "";
-        NameSaveBtn.IsEnabled = false;
+        NameEditBox.Text = NameText.Text;
+        NameSaveBtn.IsEnabled = !string.IsNullOrWhiteSpace(NameEditBox.Text);
         NameEditPanel.Visibility = Visibility.Visible;
         NameEditBox.Focus();
+        NameEditBox.SelectAll();
     }
 
     private void NameEditBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -811,6 +936,7 @@ public partial class MainWindow : Window
 
     private async Task<bool> EndActiveCallAsync(bool showError = true)
     {
+        _manualEndConfirmed = false;
         CallSessionSnapshot? session = _callSession.Current;
         if (session?.State == CallSessionState.Ended)
             return true;
@@ -822,6 +948,32 @@ public partial class MainWindow : Window
         bool idle = await AdbController.WaitForIdleAsync(session.DeviceSerial);
         if (_callSession.Current?.OperationId != session.OperationId)
             return false;
+        if (!idle)
+        {
+            int? observedState = await AdbController.GetCallStateAsync(session.DeviceSerial);
+            if (_callSession.Current?.OperationId != session.OperationId)
+                return false;
+            if (observedState == 0)
+                idle = true;
+            else if (CallWorkflowPolicy.CanOfferManualEndConfirmation(observedState))
+            {
+                MessageBoxResult answer = MessageBox.Show(
+                    "휴대폰에서 통화가 이미 끝났다면 결과 저장을 진행할까요?",
+                    "통화 종료 상태 확인",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (answer == MessageBoxResult.Yes)
+                {
+                    MarkCallEnded();
+                    _manualEndConfirmed = _callSession.State == CallSessionState.Ended;
+                    if (_manualEndConfirmed)
+                    {
+                        FlashBanner("수동으로 통화 종료 확인 — 결과를 선택하세요");
+                        return true;
+                    }
+                }
+            }
+        }
         if (!idle)
         {
             _callSession.CancelEnding();
@@ -927,8 +1079,10 @@ public partial class MainWindow : Window
         bool canPickResult = state is CallSessionState.Dialing or CallSessionState.Active
             or CallSessionState.Ended;
         // 저장 "실행"은 통화가 실제로 종료(Ended)된 뒤, 결과와 필요한 예약 시간이 채워졌을 때만 가능.
-        bool canExecuteSave = state == CallSessionState.Ended
-            && QueueLogic.CanEnableSave(_selectedResult, CallbackBox.Text, DateTimeOffset.Now);
+        bool scheduleValid = !CallWorkflowPolicy.NeedsScheduledTime(_selectedResult)
+            || CurrentScheduledTime(DateTimeOffset.Now).IsValid;
+        bool canExecuteSave = CallWorkflowPolicy.CanSave(
+            state, _selectedResult, scheduleValid);
 
         DialBtn.IsEnabled = idle && _current != null
             && !_completedLeadIds.Contains(_current.Id)
@@ -942,6 +1096,7 @@ public partial class MainWindow : Window
             resultButton.IsEnabled = canPickResult;
         MemoBox.IsEnabled = canPickResult;
         CallbackBox.IsEnabled = canPickResult;
+        CallbackDatePicker.IsEnabled = canPickResult;
         DeviceSelector.IsEnabled = idle && DeviceSelector.Items.Count > 1;
         ManualBox.IsEnabled = idle && !_resolvingManualCall;
         ManualPasteBtn.IsEnabled = idle && !_resolvingManualCall;
@@ -950,6 +1105,14 @@ public partial class MainWindow : Window
         DialBtn.Content = state == CallSessionState.Authorizing ? "확인 중…" : "발신 (F1)";
         HangupBtn.Content = state == CallSessionState.Ending ? "종료 확인 중…" : "종료 (F2)";
         SaveBtn.Content = state == CallSessionState.Saving ? "저장 중…" : "저장하고 다음 (F3)";
+    }
+
+    private ScheduledTimeResult CurrentScheduledTime(DateTimeOffset now)
+    {
+        DateOnly? date = CallbackDatePicker.SelectedDate is DateTime selected
+            ? DateOnly.FromDateTime(selected)
+            : null;
+        return QueueLogic.ScheduledLocalTime(date, CallbackBox.Text, now);
     }
 
     private void ResetCallUi()
@@ -1001,21 +1164,27 @@ public partial class MainWindow : Window
         _selectedResult = code;
         foreach (var (c, b) in _resultButtons)
             b.IsChecked = c == code;
-        bool needsTime = code is "CALLBACK" or "APPOINTMENT";
+        bool needsTime = CallWorkflowPolicy.NeedsScheduledTime(code);
         CallbackPanel.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
-        CallbackLabel.Text = code == "APPOINTMENT" ? "상담 예약 시간" : "콜백 예약 시간";
-        CallbackHint.Text = code == "APPOINTMENT"
-            ? "HH:MM 입력 · 지난 시간은 내일 예약"
-            : "HH:MM 입력 · 지난 시간은 내일 콜백";
+        CallbackLabel.Text = code == "APPOINTMENT" ? "상담예약" : "콜백 예약";
+        CallbackHint.Text = "날짜와 시간을 모두 입력";
         CallbackBox.ToolTip = code == "APPOINTMENT"
-            ? "예약 시간 (예: 14:30)"
-            : "콜백 시간 (예: 14:30)";
+            ? "상담예약 시간 (24시간제 HH:MM)"
+            : "콜백 시간 (24시간제 HH:MM)";
         if (needsTime)
+        {
+            CallbackDatePicker.SelectedDate ??= DateTime.Today;
             CallbackBox.Focus();
+        }
         UpdateCallControls();
     }
 
     private void CallbackBox_TextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateCallControls();
+
+    private void CallbackDatePicker_SelectedDateChanged(
+        object sender,
+        SelectionChangedEventArgs e) =>
         UpdateCallControls();
 
     private void ResetForm()
@@ -1025,6 +1194,7 @@ public partial class MainWindow : Window
             b.IsChecked = false;
         MemoBox.Text = "";
         CallbackBox.Text = "";
+        CallbackDatePicker.SelectedDate = null;
         CallbackPanel.Visibility = Visibility.Collapsed;
         TimerText.Text = "00:00";
     }
@@ -1044,36 +1214,38 @@ public partial class MainWindow : Window
         if (currentSession.State is CallSessionState.Dialing or CallSessionState.Active)
         {
             // 저장은 통화종료(Ended)에서만 실행 — 통화를 끊지 않고 인라인 안내만 표시한다.
-            FlashSaveHint("통화 중입니다 — F2로 종료 후 저장하세요");
+            FlashSaveHint("통화를 먼저 종료(F2)한 뒤 저장하세요");
             return;
         }
+        if (currentSession.State != CallSessionState.Ended)
+            return;
         if (_selectedResult == null)
         {
-            MessageBox.Show("상담 결과를 먼저 선택하세요.", "결과 선택",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            FlashSaveHint("상담 결과를 먼저 선택하세요");
             return;
         }
         string? callbackAt = null;
         string? appointmentAt = null;
-        if (_selectedResult == "CALLBACK")
+        if (CallWorkflowPolicy.NeedsScheduledTime(_selectedResult))
         {
-            callbackAt = QueueLogic.LocalTimeIso(CallbackBox.Text, DateTimeOffset.Now);
-            if (callbackAt == null)
+            ScheduledTimeResult scheduled = CurrentScheduledTime(DateTimeOffset.Now);
+            if (!scheduled.IsValid)
             {
-                MessageBox.Show("콜백 시간을 HH:MM 형식으로 입력하세요 (예: 14:30).", "시간 형식",
+                string subject = _selectedResult == "APPOINTMENT" ? "상담예약" : "콜백";
+                string message = scheduled.Error switch
+                {
+                    ScheduledTimeError.MissingDate => $"{subject} 날짜를 선택하세요.",
+                    ScheduledTimeError.NotFuture => $"{subject} 날짜와 시간이 이미 지났습니다.",
+                    _ => $"{subject} 시간을 24시간제 HH:MM 형식으로 입력하세요 (예: 14:30).",
+                };
+                MessageBox.Show(message, "예약 시간 확인",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-        }
-        if (_selectedResult == "APPOINTMENT")
-        {
-            appointmentAt = QueueLogic.LocalTimeIso(CallbackBox.Text, DateTimeOffset.Now);
-            if (appointmentAt == null)
-            {
-                MessageBox.Show("예약 시간을 HH:MM 형식으로 입력하세요 (예: 14:30).", "시간 형식",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+            if (_selectedResult == "CALLBACK")
+                callbackAt = scheduled.Iso;
+            else
+                appointmentAt = scheduled.Iso;
         }
         if (!_callSession.TryBeginSaving(out CallSessionSnapshot? savingSession))
             return;
@@ -1098,16 +1270,16 @@ public partial class MainWindow : Window
             if (code == "WON")
                 _todayWon++;
             UpdateToday();
-            CompleteSavedSession(
-                QueueLogic.CanRedialAfterSavedStatus(saved.Lead.Status, persisted: true));
+            CompleteSavedSession(code, showSavedFeedback: true);
             await RefreshQueueAsync();
-            await RefreshTodayAsync();
+            if (_serverInsightsEnabled)
+                await RefreshTodayAsync();
         }
         catch (NetworkException)
         {
             if (!TryQueuePending(payload))
                 return;
-            CompleteSavedSession();
+            CompleteSavedSession(code);
             UpdateBanner();
             SetCrm(false);
             FlashBanner("연결 실패 — 기록을 대기열에 보관했습니다");
@@ -1117,7 +1289,7 @@ public partial class MainWindow : Window
         {
             if (!TryQueuePending(payload))
                 return;
-            CompleteSavedSession();
+            CompleteSavedSession(code);
             if (_waitingForExpiredSessionResult)
                 ResumeAuthNavigationAfterResult();
             else
@@ -1127,7 +1299,7 @@ public partial class MainWindow : Window
         {
             if (!TryQueuePending(payload))
                 return;
-            CompleteSavedSession();
+            CompleteSavedSession(code);
             UpdateBanner();
             SetCrm(false);
             FlashBanner("서버 일시 오류 — 기록을 대기열에 보관했습니다");
@@ -1159,20 +1331,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CompleteSavedSession(bool allowRedial = false)
+    private void CompleteSavedSession(string resultCode, bool showSavedFeedback = false)
     {
+        string feedback = $"{QueueLogic.MaskName(NameText.Text)} · "
+                          + $"{Ui.LabelFor(resultCode)} 저장됨";
         CallSessionSnapshot? completed = _callSession.CompleteSaving();
         if (completed == null)
             return;
-        if (allowRedial)
-            _completedLeadIds.Remove(completed.LeadId);
-        else
-            _completedLeadIds.Add(completed.LeadId);
+        _completedLeadIds.Add(completed.LeadId);
         ResetCallUi();
         ResetForm();
         _leads = _leads.Where(item => item.Id != completed.LeadId).ToList();
         _current = null;
         RenderQueue();
+        if (showSavedFeedback)
+            FlashBanner(feedback);
         Select(FirstSelectableLead(FilteredLeads()));
     }
 
@@ -1225,10 +1398,19 @@ public partial class MainWindow : Window
                 MessageBox.Show(network.Message, "연결 오류", MessageBoxButton.OK, MessageBoxImage.Error);
                 break;
             case NightBlockedException night:
-                MessageBox.Show(night.Message, "야간 제한", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"{night.Message}\n오류 코드: {night.Code}", "야간 제한",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                break;
+            case DncBlockedException:
+                MessageBox.Show(
+                    DncBlockedException.UserMessage,
+                    "수신거부 발신 차단",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 break;
             case ApiException api:
-                MessageBox.Show(api.Message, "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"{api.Message}\n오류 코드: {api.Code}", "오류",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
                 break;
             default:
                 App.LogError(ex.ToString());
@@ -1320,6 +1502,17 @@ public partial class MainWindow : Window
                 _closing = false;
                 return;
             }
+            if (_manualEndConfirmed)
+            {
+                _closing = false;
+                FlashSaveHint("통화 종료 상태로 전환했습니다. 결과를 저장한 뒤 종료하세요");
+                MessageBox.Show(
+                    "통화 종료 상태로 전환했습니다.\n결과를 저장한 뒤 앱을 종료하세요.",
+                    "결과 저장 가능",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
         }
         else if (state == CallSessionState.Ended)
         {
@@ -1346,7 +1539,6 @@ public partial class MainWindow : Window
         var info = await _client.CheckVersionAsync();
         if (info == null || !System.Version.TryParse(Ui.Version, out var mine))
             return;
-        _downloadUrl = info.DownloadUrl;
         if (System.Version.TryParse(info.MinVersion, out var required) && mine < required)
         {
             MessageBox.Show(
@@ -1361,22 +1553,22 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateLink_Click(object sender, RoutedEventArgs e)
+    private async void UpdateLink_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_downloadUrl))
+        if (Application.Current is not App app)
         {
-            MessageBox.Show("다운로드 주소가 등록되지 않았습니다.\n관리자에게 새 버전을 요청하세요.",
-                "업데이트", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("업데이트 확인을 시작할 수 없습니다.", "업데이트",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        UpdateLink.IsEnabled = false;
         try
         {
-            Process.Start(new ProcessStartInfo(_downloadUrl) { UseShellExecute = true });
+            await app.RunVerifiedUpdateAsync(userInitiated: true);
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        finally
         {
-            MessageBox.Show($"브라우저를 열 수 없습니다.\n{_downloadUrl}", "업데이트",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            UpdateLink.IsEnabled = true;
         }
     }
 

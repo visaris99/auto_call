@@ -68,4 +68,49 @@ public class AppConfigTests : IDisposable
         Assert.True(Directory.Exists(dir));
         Assert.EndsWith("MilestoneDialer", dir);
     }
+
+    [Theory]
+    [InlineData("crm.example.com", "https://crm.example.com")]
+    [InlineData(" https://crm.example.com/ ", "https://crm.example.com")]
+    [InlineData("http://localhost:3005", "http://localhost:3005")]
+    public void TryNormalizeServerUrl_AcceptsAbsoluteHttpUrls(
+        string input,
+        string expected)
+    {
+        Assert.True(AppConfig.TryNormalizeServerUrl(input, out string normalized));
+        Assert.Equal(expected, normalized);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("https://")]
+    [InlineData("ftp://crm.example.com")]
+    [InlineData("https://crm.example.com?redirect=other")]
+    [InlineData("not a host")]
+    public void TryNormalizeServerUrl_RejectsInvalidValues(string input)
+    {
+        Assert.False(AppConfig.TryNormalizeServerUrl(input, out _));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("ON")]
+    [InlineData(" yes ")]
+    public void ServerInsightsFeatureFlag_AcceptsExplicitTrueValues(string value)
+    {
+        Assert.True(AppConfig.IsServerInsightsEnabled(
+            name => name == AppConfig.ServerInsightsFeatureFlag ? value : null));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("false")]
+    [InlineData("unexpected")]
+    public void ServerInsightsFeatureFlag_IsDisabledByDefault(string? value)
+    {
+        Assert.False(AppConfig.IsServerInsightsEnabled(_ => value));
+    }
 }

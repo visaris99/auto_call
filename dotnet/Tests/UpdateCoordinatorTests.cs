@@ -89,6 +89,29 @@ public sealed class UpdateCoordinatorTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_WaitsAtInstallGateAfterVerification()
+    {
+        SignedUpdateFixture fixture = UpdateTestData.Create();
+        var downloader = new RecordingDownloader(fixture.PackageBytes);
+        var installer = new RecordingInstaller();
+        var installGate = new BlockingInstallGate();
+        UpdateCoordinator coordinator = Coordinator(
+            fixture, downloader, installer, installGate: installGate);
+
+        Task<UpdateRunResult> run = coordinator.RunAsync(
+            fixture.Info, "2.4.0", _tempDir);
+        await installGate.Started.Task;
+
+        Assert.Equal(1, downloader.Calls);
+        Assert.Equal(0, installer.Calls);
+
+        installGate.Release.SetResult();
+        UpdateRunResult result = await run;
+        Assert.Equal(UpdateRunStatus.InstallerStarted, result.Status);
+        Assert.Equal(1, installer.Calls);
+    }
+
+    [Fact]
     public void WindowsInspector_RejectsNonPeFile()
     {
         string path = Path.Combine(_tempDir, "not-pe.exe");
@@ -126,12 +149,14 @@ public sealed class UpdateCoordinatorTests : IDisposable
         SignedUpdateFixture fixture,
         IUpdatePackageDownloader downloader,
         IUpdateInstaller installer,
-        SemaphoreSlim? gate = null) => new(
+        SemaphoreSlim? gate = null,
+        IUpdateInstallGate? installGate = null) => new(
         new UpdateManifestVerifier(fixture.Policy, fixture.TrustedKeys),
         downloader,
         new NoOpInspector(),
         installer,
-        gate ?? new SemaphoreSlim(1, 1));
+        gate ?? new SemaphoreSlim(1, 1),
+        installGate);
 
     private sealed class NoOpInspector : IUpdatePackageInspector
     {
@@ -193,6 +218,20 @@ public sealed class UpdateCoordinatorTests : IDisposable
         {
             Calls++;
             if (Failure is not null) throw Failure;
+        }
+    }
+
+    private sealed class BlockingInstallGate : IUpdateInstallGate
+    {
+        internal TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task WaitUntilReadyAsync(CancellationToken cancellationToken = default)
+        {
+            Started.SetResult();
+            await Release.Task.WaitAsync(cancellationToken);
         }
     }
 }

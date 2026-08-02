@@ -38,13 +38,16 @@ public partial class App : Application
         var login = new LoginWindow();
         MainWindow = login;
         login.Show();
-        _ = TryAutoUpdateAsync();
+        _ = RunVerifiedUpdateAsync(userInitiated: false);
     }
 
-    /// <summary>시작 시 서명된 manifest와 설치파일을 검증한 뒤 자동 업데이트한다.</summary>
-    private async Task TryAutoUpdateAsync()
+    /// <summary>
+    /// 자동 확인과 수동 링크가 공유하는 서명·해시·패키지 검증 업데이트 경로.
+    /// 명시적인 수동 요청은 자동 업데이트 비활성화 환경변수의 영향을 받지 않는다.
+    /// </summary>
+    internal async Task RunVerifiedUpdateAsync(bool userInitiated)
     {
-        if (UpdateCheck.IsAutoUpdateDisabled())
+        if (!userInitiated && UpdateCheck.IsAutoUpdateDisabled())
             return;
         UpdateWindow? window = null;
         try
@@ -52,10 +55,42 @@ public partial class App : Application
             var config = AppConfig.Load();
             var client = new ApiClient(config.ServerUrl);
             var info = await client.CheckVersionAsync();
-            if (info == null
-                || !UpdateCheck.IsNewer(Ui.Version, info.LatestVersion)
-                || string.IsNullOrWhiteSpace(info.DownloadUrl))
+            if (info == null)
+            {
+                if (userInitiated)
+                {
+                    MessageBox.Show(
+                        "업데이트 정보를 가져오지 못했습니다. 잠시 후 다시 시도하세요.",
+                        "업데이트",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
                 return;
+            }
+            if (!UpdateCheck.IsNewer(Ui.Version, info.LatestVersion))
+            {
+                if (userInitiated)
+                {
+                    MessageBox.Show(
+                        $"현재 최신 버전(v{Ui.Version})을 사용 중입니다.",
+                        "업데이트",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(info.DownloadUrl))
+            {
+                if (userInitiated)
+                {
+                    MessageBox.Show(
+                        "검증 가능한 업데이트 설치파일이 등록되지 않았습니다. 관리자에게 문의하세요.",
+                        "업데이트",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                return;
+            }
 
             var updateWindow = new UpdateWindow();
             window = updateWindow;
@@ -69,7 +104,8 @@ public partial class App : Application
                 new UpdateManifestVerifier(policy),
                 new UpdateDownloader(http, policy),
                 new WindowsUpdatePackageInspector(),
-                new ShellUpdateInstaller());
+                new ShellUpdateInstaller(),
+                installGate: new ActiveCallUpdateInstallGate(updateWindow));
             var progress = new Progress<UpdateDownloadProgress>(value =>
             {
                 double percent = value.TotalBytes > 0
@@ -90,16 +126,24 @@ public partial class App : Application
             else
             {
                 updateWindow.Close();
+                if (userInitiated && result.Status == UpdateRunStatus.Busy)
+                {
+                    MessageBox.Show(
+                        "업데이트 확인이 이미 진행 중입니다.",
+                        "업데이트",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
             }
         }
         catch (UpdateException ex)
         {
-            LogError($"AutoUpdate 실패 [{ex.Code}]: {ex.Message}");
+            LogError($"VerifiedUpdate 실패 [{ex.Code}]: {ex.Message}");
             window?.Close();
             MessageBox.Show(
-                $"자동업데이트에 실패했습니다. ({ex.Code})\n" +
+                $"업데이트 검증 또는 설치에 실패했습니다. ({ex.Code})\n" +
                 "기존 버전으로 계속 실행합니다. 관리자에게 오류 코드를 전달하세요.",
-                "업데이트 확인",
+                "업데이트",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -107,8 +151,16 @@ public partial class App : Application
             or IOException or TaskCanceledException or System.ComponentModel.Win32Exception
             or UnauthorizedAccessException)
         {
-            LogError($"AutoUpdate 실패 [{ex.GetType().Name}]: {ex.Message}");
+            LogError($"VerifiedUpdate 실패 [{ex.GetType().Name}]: {ex.Message}");
             window?.Close();
+            if (userInitiated)
+            {
+                MessageBox.Show(
+                    "업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도하세요.",
+                    "업데이트",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
     }
 
@@ -124,6 +176,62 @@ public partial class App : Application
             });
             if (process is null)
                 throw new UpdateInstallException("업데이트 설치 프로세스를 시작하지 못했습니다.");
+        }
+    }
+
+    private sealed class ActiveCallUpdateInstallGate : IUpdateInstallGate
+    {
+        private readonly UpdateWindow _progressWindow;
+
+        public ActiveCallUpdateInstallGate(UpdateWindow progressWindow)
+        {
+            _progressWindow = progressWindow;
+        }
+
+        public async Task WaitUntilReadyAsync(CancellationToken cancellationToken = default)
+        {
+            var dispatcher = Application.Current.Dispatcher;
+            MainWindow? main = await dispatcher.InvokeAsync(
+                () => Application.Current.MainWindow as MainWindow);
+            if (main == null || main.IsCallSessionIdle)
+                return;
+
+            bool installNow = await dispatcher.InvokeAsync(() =>
+            {
+                _progressWindow.Hide();
+                if (main.WindowState == WindowState.Minimized)
+                    main.WindowState = WindowState.Normal;
+                main.Show();
+                main.Activate();
+                var prompt = new UpdateInstallPromptWindow { Owner = main };
+                bool? result = prompt.ShowDialog();
+                if (result == true && prompt.InstallNow)
+                {
+                    _progressWindow.Show();
+                    return true;
+                }
+                main.ShowDeferredUpdateNotice();
+                return false;
+            });
+            if (installNow)
+                return;
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+                bool ready = await dispatcher.InvokeAsync(() =>
+                    Application.Current.MainWindow is not MainWindow workspace
+                    || workspace.IsCallSessionIdle);
+                if (!ready)
+                    continue;
+                await dispatcher.InvokeAsync(() =>
+                {
+                    _progressWindow.SetStatus("통화 종료 확인 — 설치를 시작합니다.");
+                    _progressWindow.Show();
+                });
+                return;
+            }
         }
     }
 

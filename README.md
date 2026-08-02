@@ -33,7 +33,8 @@ CRM 계정으로 로그인 → 배정된 리드 큐 → USB 연결 안드로이�
     # 실서버 통합 테스트 (dev CRM 필요)
     TM_ITEST_URL=http://127.0.0.1:3005 dotnet test dotnet/Tests --filter RealCrm
 
-환경변수: `TM_SERVER_URL`(서버 주소 강제), `TM_ADB`(adb 바이너리 경로 강제).
+환경변수: `TM_SERVER_URL`(서버 주소 강제), `TM_ADB`(adb 바이너리 경로 강제),
+`TM_ENABLE_SERVER_INSIGHTS=1`(CRM에 `/leads/{id}/history`·`/me/today`가 함께 배포된 뒤 활성화).
 설정·재전송 큐: `%APPDATA%\MilestoneDialer\`
 
 ## 파이썬 버전 (레거시 폴백)

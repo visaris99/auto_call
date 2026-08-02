@@ -12,6 +12,11 @@ public interface IUpdatePackageInspector
     void Verify(string setupPath, string expectedVersion);
 }
 
+public interface IUpdateInstallGate
+{
+    Task WaitUntilReadyAsync(CancellationToken cancellationToken = default);
+}
+
 public sealed class WindowsUpdatePackageInspector : IUpdatePackageInspector
 {
     public void Verify(string setupPath, string expectedVersion)
@@ -77,19 +82,22 @@ public sealed class UpdateCoordinator
     private readonly IUpdatePackageInspector _packageInspector;
     private readonly IUpdateInstaller _installer;
     private readonly SemaphoreSlim _gate;
+    private readonly IUpdateInstallGate? _installGate;
 
     public UpdateCoordinator(
         UpdateManifestVerifier manifestVerifier,
         IUpdatePackageDownloader downloader,
         IUpdatePackageInspector packageInspector,
         IUpdateInstaller installer,
-        SemaphoreSlim? gate = null)
+        SemaphoreSlim? gate = null,
+        IUpdateInstallGate? installGate = null)
     {
         _manifestVerifier = manifestVerifier;
         _downloader = downloader;
         _packageInspector = packageInspector;
         _installer = installer;
         _gate = gate ?? GlobalGate;
+        _installGate = installGate;
     }
 
     public async Task<UpdateRunResult> RunAsync(
@@ -122,6 +130,8 @@ public sealed class UpdateCoordinator
                     manifest, setupPath, progress, cancellationToken)
                 .ConfigureAwait(false);
             _packageInspector.Verify(setupPath, manifest.Version);
+            if (_installGate != null)
+                await _installGate.WaitUntilReadyAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {

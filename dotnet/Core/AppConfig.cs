@@ -7,6 +7,7 @@ namespace Core;
 public sealed class AppConfig
 {
     public const string DefaultServerUrl = "https://crm.milestone-sales.xyz";
+    public const string ServerInsightsFeatureFlag = "TM_ENABLE_SERVER_INSIGHTS";
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -28,6 +29,39 @@ public sealed class AppConfig
 
     [JsonPropertyName("adb_serial")]
     public string AdbSerial { get; set; } = "";
+
+    public static bool TryNormalizeServerUrl(string input, out string normalized)
+    {
+        normalized = "";
+        string candidate = input.Trim();
+        if (candidate.Length == 0)
+            return false;
+        if (!candidate.Contains("://", StringComparison.Ordinal))
+            candidate = $"https://{candidate}";
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || string.IsNullOrWhiteSpace(uri.Host)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
+            return false;
+        normalized = uri.AbsoluteUri.TrimEnd('/');
+        return true;
+    }
+
+    /// <summary>
+    /// CRM에 /leads/{id}/history와 /me/today가 함께 배포된 뒤에만 켠다.
+    /// 기본값은 false이며 1/true/on/yes를 명시한 경우에만 활성화한다.
+    /// </summary>
+    public static bool IsServerInsightsEnabled(
+        Func<string, string?>? readEnvironmentVariable = null)
+    {
+        readEnvironmentVariable ??= Environment.GetEnvironmentVariable;
+        string value = readEnvironmentVariable(ServerInsightsFeatureFlag)?.Trim() ?? "";
+        return value.Equals("1", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("on", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
+    }
 
     public static string ConfigDir()
     {
