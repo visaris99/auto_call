@@ -1,0 +1,59 @@
+<Window x:Class="MilestoneDialer.ErrorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="오류" Width="470" MinWidth="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        WindowStyle="ToolWindow" ShowInTaskbar="False"
+        Background="{StaticResource B.Background}"
+        FontFamily="{StaticResource AppFont}">
+    <Grid Margin="24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal">
+            <Border Background="{StaticResource B.Ink}" CornerRadius="4"
+                    Padding="8,3" VerticalAlignment="Center">
+                <TextBlock x:Name="CodeText" Text="CRM-01" FontSize="12" FontWeight="Bold"
+                           Foreground="White"/>
+            </Border>
+            <TextBlock x:Name="TitleText" Text="오류 제목" FontSize="15" FontWeight="Bold"
+                       Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{StaticResource B.Ink}"/>
+        </StackPanel>
+
+        <TextBlock x:Name="CauseText" Grid.Row="1" FontSize="12" TextWrapping="Wrap"
+                   Margin="0,12,0,0" Foreground="{StaticResource B.Foreground}"/>
+
+        <Border Grid.Row="2" Background="{StaticResource B.Surface2}" CornerRadius="6"
+                Padding="12,9" Margin="0,12,0,0">
+            <TextBlock x:Name="NextActionText" FontSize="12" FontWeight="SemiBold"
+                       TextWrapping="Wrap" Foreground="{StaticResource B.Ink}"/>
+        </Border>
+
+        <Expander Grid.Row="3" Header="상세 정보" FontSize="12" Margin="0,12,0,0"
+                  Foreground="{StaticResource B.Muted}">
+            <ItemsControl x:Name="DetailItems" Margin="0,6,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,3"
+                                   Foreground="{StaticResource B.Foreground}"
+                                   Text="{Binding}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Margin="0,18,0,0">
+            <Button x:Name="CopyBtn" Content="관리자 보고 복사" Style="{StaticResource GhostBtn}"
+                    MinWidth="130" MinHeight="36" Click="CopyReport_Click"/>
+            <Button Content="확인" Style="{StaticResource PrimaryBtn}" IsDefault="True" IsCancel="True"
+                    MinWidth="96" MinHeight="36" Margin="8,0,0,0" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

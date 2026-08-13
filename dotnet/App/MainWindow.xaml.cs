@@ -751,8 +751,10 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException
                                    or InvalidOperationException)
         {
-            MessageBox.Show("클립보드에 전화번호를 복사하지 못했습니다.", "번호 복사",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            ErrorDialog.Show(this, ErrorCatalog.App(ErrorCatalog.AppClipboard,
+                "클립보드에 전화번호를 복사하지 못했습니다. 다른 프로그램이 클립보드를 사용 중일 수 있습니다.",
+                "잠시 후 다시 시도하세요. 반복되면 원격 제어·보안 프로그램을 확인하세요.",
+                ex.GetType().Name), _client.User?.LoginId);
         }
     }
 
@@ -980,11 +982,14 @@ public partial class MainWindow : Window
             UpdateCallControls();
             if (showError)
             {
+                string adbCode = commandSent ? ErrorCatalog.AdbStateUnknown : ErrorCatalog.AdbHangupFailed;
                 string detail = commandSent
                     ? "종료 명령을 보냈지만 단말의 통화 종료 상태를 확인하지 못했습니다."
-                    : "단말에 통화 종료 명령을 보내지 못했습니다.";
-                MessageBox.Show($"{detail}\n휴대폰에서 통화를 종료한 뒤 다시 시도하세요.", "통화 종료",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                    : "단말에 통화 종료 명령을 보내지 못했습니다. USB 연결이 끊겼을 수 있습니다.";
+                _lastError = $"[{adbCode}] {detail}";
+                ErrorDialog.Show(this, ErrorCatalog.Adb(adbCode, detail,
+                    "휴대폰에서 통화를 종료한 뒤 다시 시도하세요. 반복되면 USB 케이블을 다시 연결하고 관리자에게 전달하세요.",
+                    _adbSerial), _client.User?.LoginId);
             }
             return false;
         }
@@ -1065,8 +1070,9 @@ public partial class MainWindow : Window
         }
         catch (System.Runtime.InteropServices.COMException)
         {
-            MessageBox.Show("클립보드 내용을 읽지 못했습니다.", "붙여넣기",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            ErrorDialog.Show(this, ErrorCatalog.App(ErrorCatalog.AppClipboard,
+                "클립보드 내용을 읽지 못했습니다. 다른 프로그램이 클립보드를 사용 중일 수 있습니다.",
+                "잠시 후 다시 시도하세요.", "COMException"), _client.User?.LoginId);
         }
     }
 
@@ -1387,34 +1393,28 @@ public partial class MainWindow : Window
 
     private void HandleError(Exception ex)
     {
-        _lastError = ex.Message;
         switch (ex)
         {
             case AuthException:
+                _lastError = $"[CRM-02] {ex.Message}";
                 OnAuthLost();
                 break;
-            case NetworkException network:
-                SetCrm(false);
-                MessageBox.Show(network.Message, "연결 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                break;
-            case NightBlockedException night:
-                MessageBox.Show($"{night.Message}\n오류 코드: {night.Code}", "야간 제한",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                break;
-            case DncBlockedException:
-                MessageBox.Show(
-                    DncBlockedException.UserMessage,
-                    "수신거부 발신 차단",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                break;
             case ApiException api:
-                MessageBox.Show($"{api.Message}\n오류 코드: {api.Code}", "오류",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                if (api is NetworkException)
+                    SetCrm(false);
+                ErrorReport apiReport = ErrorCatalog.FromApi(api);
+                _lastError = $"[{apiReport.Code}] {api.Message}";
+                ErrorDialog.Show(this, apiReport, _client.User?.LoginId);
                 break;
             default:
                 App.LogError(ex.ToString());
-                MessageBox.Show(ex.Message, "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                ErrorReport appReport = ErrorCatalog.App(
+                    ErrorCatalog.AppUnhandled,
+                    ex.Message,
+                    "작업을 다시 시도하세요. 반복되면 [관리자 보고 복사]로 관리자에게 전달하세요.",
+                    ex.GetType().Name);
+                _lastError = $"[{ErrorCatalog.AppUnhandled}] {ex.Message}";
+                ErrorDialog.Show(this, appReport, _client.User?.LoginId);
                 break;
         }
     }

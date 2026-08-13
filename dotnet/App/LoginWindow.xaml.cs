@@ -93,7 +93,8 @@ public partial class LoginWindow : Window
         }
         catch (ApiException ex)
         {
-            ErrorText.Text = ex.Message;
+            // 코드 병기 — 로그인 불가 상황을 상담원이 관리자에게 그대로 전달할 수 있게
+            ErrorText.Text = $"{ex.Message} [{Core.ErrorCatalog.FromApi(ex).Code}]";
         }
         finally
         {
