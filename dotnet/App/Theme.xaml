@@ -82,7 +82,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                        <ContentPresenter x:Name="cp" HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -91,7 +91,9 @@
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Ink}"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <!-- 결과 버튼은 상태색을 로컬 Foreground로 받으므로(우선순위가 스타일 트리거보다
+                                 높음) 체크 시 글자색은 ContentPresenter에 직접 지정해야 적용된다. -->
+                            <Setter TargetName="cp" Property="TextElement.Foreground" Value="White"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

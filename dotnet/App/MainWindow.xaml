@@ -231,13 +231,13 @@
                                      Grid.Row="0" Grid.Column="1"
                                      MinHeight="34" MaxLength="2000"
                                      ToolTip="이번 통화 기록에 포함 · 최대 2000자"/>
-                            <Button x:Name="SaveBtn" Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
+                            <Button x:Name="SaveBtn" Grid.Row="0" Grid.Column="2"
                                     Content="저장하고 다음 (F3)"
                                     Style="{StaticResource PrimaryBtn}" Width="176" Height="36"
                                     FontSize="13" FontWeight="Bold" Margin="8,0,0,0"
                                     VerticalAlignment="Top" IsEnabled="False" Click="Save_Click"/>
 
-                            <Border x:Name="CallbackPanel" Grid.Row="1" Grid.Column="1"
+                            <Border x:Name="CallbackPanel" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
                                     Margin="0,8,0,0" Padding="10,8"
                                     Background="{StaticResource B.Surface2}"
                                     BorderBrush="{StaticResource B.Line}" BorderThickness="1"
@@ -254,15 +254,26 @@
                                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <StackPanel Orientation="Horizontal">
                                         <DatePicker x:Name="CallbackDatePicker"
-                                                    Width="132" Height="34"
+                                                    Width="132" MinHeight="34"
                                                     SelectedDateFormat="Short"
                                                     ToolTip="콜백 또는 상담예약 날짜"
                                                     SelectedDateChanged="CallbackDatePicker_SelectedDateChanged"/>
-                                        <TextBox x:Name="CallbackBox" Style="{StaticResource Input}"
-                                                 Width="76" MinHeight="34" MaxLength="5"
-                                                 Margin="8,0,0,0"
-                                                 ToolTip="24시간제 HH:MM. 예: 14:30"
-                                                 TextChanged="CallbackBox_TextChanged"/>
+                                        <ComboBox x:Name="CallbackHourBox" Width="64" MinHeight="34"
+                                                  Margin="8,0,0,0" FontSize="13"
+                                                  VerticalContentAlignment="Center"
+                                                  ToolTip="시 (24시간제)"
+                                                  SelectionChanged="CallbackTime_SelectionChanged"/>
+                                        <TextBlock Text="시" FontSize="12"
+                                                   Foreground="{StaticResource B.Foreground}"
+                                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                        <ComboBox x:Name="CallbackMinuteBox" Width="64" MinHeight="34"
+                                                  Margin="8,0,0,0" FontSize="13"
+                                                  VerticalContentAlignment="Center"
+                                                  ToolTip="분 (5분 단위)"
+                                                  SelectionChanged="CallbackTime_SelectionChanged"/>
+                                        <TextBlock Text="분" FontSize="12"
+                                                   Foreground="{StaticResource B.Foreground}"
+                                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>

@@ -95,6 +95,7 @@ public partial class MainWindow : Window
         UserText.Text = $"{client.User?.OrgName} · {client.User?.Name}";
         BuildResultButtons();
         BuildFilterChips();
+        InitCallbackTimeOptions();
         UpdateBanner();
         // 연속 발신은 별도 운영 승인 전까지 중단한다.
         if (config.AutoDial)
@@ -1095,7 +1096,8 @@ public partial class MainWindow : Window
         foreach (ToggleButton resultButton in _resultButtons.Values)
             resultButton.IsEnabled = canPickResult;
         MemoBox.IsEnabled = canPickResult;
-        CallbackBox.IsEnabled = canPickResult;
+        CallbackHourBox.IsEnabled = canPickResult;
+        CallbackMinuteBox.IsEnabled = canPickResult;
         CallbackDatePicker.IsEnabled = canPickResult;
         DeviceSelector.IsEnabled = idle && DeviceSelector.Items.Count > 1;
         ManualBox.IsEnabled = idle && !_resolvingManualCall;
@@ -1112,7 +1114,22 @@ public partial class MainWindow : Window
         DateOnly? date = CallbackDatePicker.SelectedDate is DateTime selected
             ? DateOnly.FromDateTime(selected)
             : null;
-        return QueueLogic.ScheduledLocalTime(date, CallbackBox.Text, now);
+        return QueueLogic.ScheduledLocalTime(date, SelectedCallbackTimeText(), now);
+    }
+
+    /// <summary>시·분 드롭다운 선택을 Core 계약(HH:mm)으로 변환. 미선택이면 빈 문자열.</summary>
+    private string SelectedCallbackTimeText() =>
+        CallbackHourBox.SelectedItem is string hour
+        && CallbackMinuteBox.SelectedItem is string minute
+            ? $"{hour}:{minute}"
+            : "";
+
+    private void InitCallbackTimeOptions()
+    {
+        CallbackHourBox.ItemsSource =
+            Enumerable.Range(0, 24).Select(h => h.ToString("00")).ToArray();
+        CallbackMinuteBox.ItemsSource =
+            Enumerable.Range(0, 12).Select(m => (m * 5).ToString("00")).ToArray();
     }
 
     private void ResetCallUi()
@@ -1133,20 +1150,26 @@ public partial class MainWindow : Window
         foreach (var (code, label, key) in Ui.Results)
         {
             var (bg, fg) = Ui.StatusColors(code);
+            var content = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(key) ? label : $"{label}\n({key})",
+                TextAlignment = TextAlignment.Center,
+                Foreground = fg,
+            };
             var btn = new ToggleButton
             {
                 Style = (Style)FindResource("ResultToggle"),
                 Background = bg,
-                Foreground = fg,
                 Height = 48,
                 FontSize = 12,
                 Margin = new Thickness(3, 0, 3, 0),
-                Content = new TextBlock
-                {
-                    Text = string.IsNullOrEmpty(key) ? label : $"{label}\n({key})",
-                    TextAlignment = TextAlignment.Center,
-                },
+                Content = content,
             };
+            // Content TextBlock은 버튼의 논리 트리 자식이라 템플릿 트리거의 글자색이
+            // 상속되지 않는다. 체크 상태 전환 시 직접 색을 바꿔 잉크 배경 위에서도 읽히게 한다.
+            btn.Checked += (_, _) =>
+                content.Foreground = System.Windows.Media.Brushes.White;
+            btn.Unchecked += (_, _) => content.Foreground = fg;
             btn.Click += (_, _) => SelectResult(code);
             _resultButtons[code] = btn;
             if (IsSecondaryResult(code))
@@ -1167,19 +1190,28 @@ public partial class MainWindow : Window
         bool needsTime = CallWorkflowPolicy.NeedsScheduledTime(code);
         CallbackPanel.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
         CallbackLabel.Text = code == "APPOINTMENT" ? "상담예약" : "콜백 예약";
-        CallbackHint.Text = "날짜와 시간을 모두 입력";
-        CallbackBox.ToolTip = code == "APPOINTMENT"
-            ? "상담예약 시간 (24시간제 HH:MM)"
-            : "콜백 시간 (24시간제 HH:MM)";
+        CallbackHint.Text = "날짜와 시간을 선택";
         if (needsTime)
         {
-            CallbackDatePicker.SelectedDate ??= DateTime.Today;
-            CallbackBox.Focus();
+            // 기본값: 1시간 뒤 정시 (자정을 넘기면 날짜도 다음날로). 이미 고른 값은 유지.
+            DateTime defaultTarget = DateTime.Now.AddHours(1);
+            CallbackDatePicker.SelectedDate ??= defaultTarget.Date;
+            if (CallbackHourBox.SelectedItem == null)
+                CallbackHourBox.SelectedItem = defaultTarget.Hour.ToString("00");
+            if (CallbackMinuteBox.SelectedItem == null)
+                CallbackMinuteBox.SelectedItem = "00";
+            CallbackHourBox.Focus();
+            // 패널이 접힘선 아래에 걸리지 않게 레이아웃 계산 후 화면 안으로 스크롤.
+            Dispatcher.BeginInvoke(
+                new Action(() => CallbackPanel.BringIntoView()),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
         UpdateCallControls();
     }
 
-    private void CallbackBox_TextChanged(object sender, TextChangedEventArgs e) =>
+    private void CallbackTime_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e) =>
         UpdateCallControls();
 
     private void CallbackDatePicker_SelectedDateChanged(
@@ -1193,7 +1225,8 @@ public partial class MainWindow : Window
         foreach (var b in _resultButtons.Values)
             b.IsChecked = false;
         MemoBox.Text = "";
-        CallbackBox.Text = "";
+        CallbackHourBox.SelectedItem = null;
+        CallbackMinuteBox.SelectedItem = null;
         CallbackDatePicker.SelectedDate = null;
         CallbackPanel.Visibility = Visibility.Collapsed;
         TimerText.Text = "00:00";
@@ -1236,7 +1269,7 @@ public partial class MainWindow : Window
                 {
                     ScheduledTimeError.MissingDate => $"{subject} 날짜를 선택하세요.",
                     ScheduledTimeError.NotFuture => $"{subject} 날짜와 시간이 이미 지났습니다.",
-                    _ => $"{subject} 시간을 24시간제 HH:MM 형식으로 입력하세요 (예: 14:30).",
+                    _ => $"{subject} 시와 분을 선택하세요.",
                 };
                 MessageBox.Show(message, "예약 시간 확인",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -1593,8 +1626,11 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
         }
-        // 숫자키 1~9/0 — 입력창에 타이핑 중일 때는 가로채지 않는다
-        if (Keyboard.FocusedElement is TextBox or PasswordBox)
+        // 숫자키 1~9/0 — 입력·선택 컨트롤에 포커스가 있으면 가로채지 않는다
+        // (콜백 시·분 ComboBox에서 숫자로 항목을 찾는 입력까지 보호)
+        if (Keyboard.FocusedElement is TextBoxBase or PasswordBox
+            or ComboBox or ComboBoxItem or DatePicker or Calendar
+            or CalendarButton or CalendarDayButton)
             return;
         int index = e.Key switch
         {
