@@ -18,6 +18,8 @@
     <SolidColorBrush x:Key="B.Success" Color="#1A7F4B"/>
     <SolidColorBrush x:Key="B.SuccessSoft" Color="#E2F0E8"/>
     <SolidColorBrush x:Key="B.Muted" Color="#8A857A"/>
+    <!-- 추가 토큰(CRM 계약 밖) — Milestone 브랜드 네이비. 텍스트 아님, 면·포커스 전용 -->
+    <SolidColorBrush x:Key="B.Navy" Color="#16273A"/>
 
     <!-- 폰트: 나눔고딕 설치 시 우선, 없으면 맑은 고딕 (WPF 네이티브 폴백) -->
     <FontFamily x:Key="AppFont">나눔고딕, Malgun Gothic</FontFamily>
@@ -40,25 +42,38 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"/>
+                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Grid>
+                            <Border x:Name="ov" Background="#161410" Opacity="0" CornerRadius="6"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <!-- 호버: 전체 페이드 대신 얇은 암전 오버레이 — 텍스트 대비 유지 -->
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+                            <Setter TargetName="ov" Property="Opacity" Value="0.08"/>
                         </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
+                        <!-- 키보드 포커스: 입력 필드와 동일한 골드 링 -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <!-- 비활성: 투명도 대신 색 전환 — 대비 유지(접근성 원칙) -->
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{StaticResource B.Line}"/>
+                <Setter Property="Foreground" Value="{StaticResource B.Muted}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource BtnBase}">
-        <Setter Property="Background" Value="{StaticResource B.Ink}"/>
+        <Setter Property="Background" Value="{StaticResource B.Navy}"/>
     </Style>
     <Style x:Key="SuccessBtn" TargetType="Button" BasedOn="{StaticResource BtnBase}">
         <Setter Property="Background" Value="{StaticResource B.Success}"/>
@@ -81,16 +96,23 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"/>
+                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8"
+                            BorderThickness="2" BorderBrush="Transparent">
+                        <Grid>
+                            <Border x:Name="ov" Background="#161410" Opacity="0" CornerRadius="6"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+                            <Setter TargetName="ov" Property="Opacity" Value="0.06"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Ink}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Navy}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -181,9 +203,12 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Hover}"/>
                         </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Ink}"/>
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Ink}"/>
+                            <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Navy}"/>
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Navy}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                     </ControlTemplate.Triggers>

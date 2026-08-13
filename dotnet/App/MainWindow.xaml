@@ -14,13 +14,13 @@
                 BorderBrush="{StaticResource B.Line}" BorderThickness="0,0,0,1" Padding="16,10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <TextBlock x:Name="UpdateLink" FontSize="11" VerticalAlignment="Center"
+                    <TextBlock x:Name="UpdateLink" FontSize="12" VerticalAlignment="Center"
                                Margin="0,0,14,0" Visibility="Collapsed">
                         <Hyperlink Click="UpdateLink_Click" Foreground="{StaticResource B.Gold}">
                             <Run x:Name="UpdateLinkRun" Text="새 버전 받기"/>
                         </Hyperlink>
                     </TextBlock>
-                    <TextBlock x:Name="BannerText" FontSize="11" Foreground="{StaticResource B.Danger}"
+                    <TextBlock x:Name="BannerText" FontSize="12" Foreground="{StaticResource B.Danger}"
                                VerticalAlignment="Center" Margin="0,0,14,0"
                                MaxWidth="360" TextTrimming="CharacterEllipsis"
                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
@@ -125,7 +125,7 @@
                                        Foreground="{StaticResource B.Ink}" MaxWidth="430"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                            <Button x:Name="EditNameBtn" Content="✏ 이름수정" Style="{StaticResource GhostBtn}"
+                            <Button x:Name="EditNameBtn" Content="이름수정" Style="{StaticResource GhostBtn}"
                                     FontSize="11" Padding="8,4" Margin="10,4,0,0" VerticalAlignment="Center"
                                     Click="EditNameBtn_Click"/>
                             <Border x:Name="StatusBadge" CornerRadius="6" Padding="8,3"
@@ -164,7 +164,7 @@
                         <ItemsControl x:Name="HistoryList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontSize="11"
+                                    <TextBlock Text="{Binding}" FontSize="12"
                                                Foreground="{StaticResource B.Muted}"
                                                TextTrimming="CharacterEllipsis" Margin="0,1"/>
                                 </DataTemplate>
@@ -254,7 +254,7 @@
                                 <DockPanel>
                                     <TextBlock x:Name="CallbackHint" DockPanel.Dock="Right"
                                                Text="날짜와 시간을 모두 입력"
-                                               FontSize="11" Foreground="{StaticResource B.Muted}"
+                                               FontSize="12" Foreground="{StaticResource B.Muted}"
                                                VerticalAlignment="Center" Margin="10,0,0,0"/>
                                     <TextBlock x:Name="CallbackLabel" DockPanel.Dock="Left"
                                                Text="콜백 예약"
