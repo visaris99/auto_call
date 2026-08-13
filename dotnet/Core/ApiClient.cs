@@ -45,7 +45,7 @@ public sealed class ApiClient
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException
                                    or InvalidOperationException)
         {
-            throw new NetworkException();
+            throw new NetworkException() { Endpoint = path };
         }
 
         using (res)
@@ -63,7 +63,7 @@ public sealed class ApiClient
             catch (JsonException)
             {
                 throw new ApiException("INTERNAL",
-                    $"서버 응답 오류(HTTP {(int)res.StatusCode})", (int)res.StatusCode);
+                    $"서버 응답 오류(HTTP {(int)res.StatusCode})", (int)res.StatusCode) { Endpoint = path };
             }
 
             if (res.IsSuccessStatusCode)
@@ -76,7 +76,9 @@ public sealed class ApiClient
                 if (err.TryGetProperty("code", out var c)) code = c.GetString() ?? code;
                 if (err.TryGetProperty("message", out var m)) message = m.GetString() ?? message;
             }
-            throw ErrorFor((int)res.StatusCode, code, message);
+            ApiException serverError = ErrorFor((int)res.StatusCode, code, message);
+            serverError.Endpoint = path;
+            throw serverError;
         }
     }
 

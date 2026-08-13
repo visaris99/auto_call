@@ -6,6 +6,9 @@ public class ApiException : Exception
     public string Code { get; }
     public int HttpStatus { get; }
 
+    /// <summary>실패한 API 경로(예: "/calls/result") — 관리자 보고용 컨텍스트.</summary>
+    public string? Endpoint { get; set; }
+
     public ApiException(string code, string message, int httpStatus = 0) : base(message)
     {
         Code = code;
