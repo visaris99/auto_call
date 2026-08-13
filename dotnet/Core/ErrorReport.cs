@@ -87,8 +87,9 @@ public static class ErrorCatalog
             {
                 Code = "CRM-07",
                 Title = "수신거부 고객",
-                Cause = "수신거부(DNC) 고객으로 발신이 차단되었습니다.",
-                NextAction = "이 고객에게는 발신할 수 없습니다. 큐를 새로고침하세요.",
+                // 승인된 고정 문구를 그대로 사용한다 (운영 매뉴얼·테스트 계약)
+                Cause = DncBlockedException.UserMessage,
+                NextAction = "다음 고객으로 진행하세요.",
                 Details = details,
             },
             _ when ex.HttpStatus >= 500 || ex.Code == "INTERNAL" => new ErrorReport

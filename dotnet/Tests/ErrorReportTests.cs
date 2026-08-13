@@ -64,3 +64,14 @@ public class ErrorReportTests
         Assert.DoesNotContain("계정:", text);
     }
 }
+
+public class DncContractTests
+{
+    [Xunit.Fact]
+    public void 수신거부_보고는_승인된_고정문구를_그대로_사용한다()
+    {
+        var report = Core.ErrorCatalog.FromApi(
+            new Core.DncBlockedException("DNC_BLOCKED", "server text", 403));
+        Xunit.Assert.Equal(Core.DncBlockedException.UserMessage, report.Cause);
+    }
+}

@@ -37,7 +37,8 @@
 
         <Expander Grid.Row="3" Header="상세 정보" FontSize="12" Margin="0,12,0,0"
                   Foreground="{StaticResource B.Muted}">
-            <ItemsControl x:Name="DetailItems" Margin="0,6,0,0">
+            <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto" Margin="0,6,0,0">
+            <ItemsControl x:Name="DetailItems">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,3"
@@ -46,6 +47,7 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+            </ScrollViewer>
         </Expander>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"

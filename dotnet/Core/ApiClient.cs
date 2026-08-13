@@ -31,7 +31,7 @@ public sealed class ApiClient
             if (auth)
             {
                 if (_token is null)
-                    throw new AuthException("UNAUTHENTICATED", "로그인이 필요합니다.", 401);
+                    throw new AuthException("UNAUTHENTICATED", "로그인이 필요합니다.", 401) { Endpoint = path };
                 req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_token}");
             }
             if (headers != null)
@@ -175,11 +175,11 @@ public sealed class ApiClient
             if (page.NextOffset is null)
                 return items;
             if (page.NextOffset <= offset)
-                throw new ApiException("INVALID_RESPONSE", "CRM 큐 페이지 응답이 올바르지 않습니다.", 200);
+                throw new ApiException("INVALID_RESPONSE", "CRM 큐 페이지 응답이 올바르지 않습니다.", 200) { Endpoint = "/leads/queue" };
             offset = page.NextOffset.Value;
         }
 
-        throw new ApiException("QUEUE_TOO_LARGE", "CRM 큐 페이지 수가 안전 한도를 초과했습니다.", 200);
+        throw new ApiException("QUEUE_TOO_LARGE", "CRM 큐 페이지 수가 안전 한도를 초과했습니다.", 200) { Endpoint = "/leads/queue" };
     }
 
     public async Task<LeadItem> ResolveAssignedLeadAsync(string phone)

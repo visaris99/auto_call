@@ -282,7 +282,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             // 일시 오류 — 다음 갱신에서 재시도
         }
     }
@@ -421,12 +421,12 @@ public partial class MainWindow : Window
         }
         catch (NetworkException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
         }
         finally
         {
@@ -497,7 +497,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         finally
@@ -713,12 +713,12 @@ public partial class MainWindow : Window
         }
         catch (NetworkException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             RevealContactBtn.ToolTip = $"{ex.Message} ({ex.Code})";
         }
         finally
@@ -1380,7 +1380,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             // 다음 주기에 재시도
         }
         finally
@@ -1390,6 +1390,10 @@ public partial class MainWindow : Window
     }
 
     // ---------- 공통 ----------
+
+    /// <summary>하트비트 lastError 정규화 — CRM 예외는 항상 [코드] 접두(운영 집계용).</summary>
+    private static string FormatLastError(Exception ex) =>
+        ex is ApiException api ? $"[{ErrorCatalog.FromApi(api).Code}] {api.Message}" : ex.Message;
 
     private void HandleError(Exception ex)
     {

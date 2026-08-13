@@ -6,6 +6,7 @@
         Background="{StaticResource B.Background}"
         FontFamily="{StaticResource AppFont}">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
         <Border Style="{StaticResource Card}" Width="348" Padding="40,28" Margin="0,16"
                 VerticalAlignment="Center" HorizontalAlignment="Center">
             <StackPanel>
@@ -36,5 +37,6 @@
                         MinHeight="30" FontSize="12" Click="ServerSettings_Click"/>
             </StackPanel>
         </Border>
+        </Grid>
     </ScrollViewer>
 </Window>
