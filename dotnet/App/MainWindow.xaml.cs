@@ -1144,7 +1144,7 @@ public partial class MainWindow : Window
                 Style = (Style)FindResource("ResultToggle"),
                 Background = bg,
                 Foreground = fg,
-                Height = 48,
+                MinHeight = 48,
                 FontSize = 12,
                 Margin = new Thickness(3, 0, 3, 0),
                 Content = new TextBlock

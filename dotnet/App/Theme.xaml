@@ -77,7 +77,7 @@
         <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
         <Setter Property="Background" Value="{StaticResource B.Surface2}"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Padding" Value="10,4"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">

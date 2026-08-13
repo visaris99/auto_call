@@ -1,7 +1,7 @@
 <Window x:Class="MilestoneDialer.UpdateInstallPromptWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="업데이트 설치" Width="430" Height="190"
+        Title="업데이트 설치" Width="450" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="ToolWindow"
         Background="{StaticResource B.Background}"
@@ -18,11 +18,11 @@
                        FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
                        Foreground="{StaticResource B.Foreground}"/>
         </StackPanel>
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button Content="통화 끝나고 설치" Style="{StaticResource GhostBtn}"
-                    Width="150" Height="36" Click="InstallLater_Click"/>
+                    MinWidth="150" MinHeight="36" Click="InstallLater_Click"/>
             <Button Content="지금 설치" Style="{StaticResource PrimaryBtn}"
-                    Width="110" Height="36" Margin="8,0,0,0" Click="InstallNow_Click"/>
+                    MinWidth="110" MinHeight="36" Margin="8,0,0,0" Click="InstallNow_Click"/>
         </StackPanel>
     </Grid>
 </Window>

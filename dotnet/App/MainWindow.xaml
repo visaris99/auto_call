@@ -21,7 +21,9 @@
                         </Hyperlink>
                     </TextBlock>
                     <TextBlock x:Name="BannerText" FontSize="11" Foreground="{StaticResource B.Danger}"
-                               VerticalAlignment="Center" Margin="0,0,14,0"/>
+                               VerticalAlignment="Center" Margin="0,0,14,0"
+                               MaxWidth="360" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                     <ComboBox x:Name="DeviceSelector" Width="150" Height="28"
                               Margin="0,0,10,0" FontSize="11"
                               DisplayMemberPath="Serial"
@@ -36,14 +38,16 @@
                 <TextBlock x:Name="UserText" FontWeight="Bold" FontSize="13"
                            Foreground="{StaticResource B.Ink}" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TodayText" Text="오늘: 발신 0 · 가입 0" FontSize="12"
-                           Foreground="{StaticResource B.Gold}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                           Foreground="{StaticResource B.Gold}" VerticalAlignment="Center" Margin="14,0,0,0"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
             </DockPanel>
         </Border>
 
         <Grid Margin="12">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="290"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="0.62*" MinWidth="290" MaxWidth="380"/>
+                <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
             <!-- 좌측: 콜 큐 -->
@@ -100,7 +104,8 @@
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding Name}" FontSize="13"
-                                               Foreground="{StaticResource B.Ink}" VerticalAlignment="Center"/>
+                                               Foreground="{StaticResource B.Ink}" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                                 </DockPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -117,7 +122,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="NameText" Text="-" FontSize="24" FontWeight="Bold"
-                                       Foreground="{StaticResource B.Ink}"/>
+                                       Foreground="{StaticResource B.Ink}" MaxWidth="430"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                             <Button x:Name="EditNameBtn" Content="✏ 이름수정" Style="{StaticResource GhostBtn}"
                                     FontSize="11" Padding="8,4" Margin="10,4,0,0" VerticalAlignment="Center"
                                     Click="EditNameBtn_Click"/>
@@ -144,16 +151,17 @@
                                        Foreground="{StaticResource B.Gold}" VerticalAlignment="Center"/>
                             <Button x:Name="RevealContactBtn" Content="연락처 보기"
                                     Style="{StaticResource GhostBtn}"
-                                    Width="96" MinHeight="30" FontSize="12" Margin="10,0,0,0"
+                                    MinWidth="96" MinHeight="30" FontSize="12" Margin="10,0,0,0"
                                     IsEnabled="False" Click="RevealContact_Click"/>
                             <Button x:Name="CopyPhoneBtn" Content="번호 복사" Style="{StaticResource GhostBtn}"
-                                    Width="86" MinHeight="30" FontSize="12" Margin="6,0,0,0"
+                                    MinWidth="86" MinHeight="30" FontSize="12" Margin="6,0,0,0"
                                     IsEnabled="False" Click="CopyLeadPhone_Click"/>
                         </StackPanel>
                         <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
                         <!-- 상담 이력 (서버 API 배포 후 자동 표시) -->
-                        <ItemsControl x:Name="HistoryList" Margin="0,8,0,0" MaxHeight="88">
+                        <ScrollViewer MaxHeight="96" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="HistoryList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}" FontSize="11"
@@ -162,6 +170,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        </ScrollViewer>
                     </StackPanel>
                 </Border>
 
@@ -169,9 +178,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <Button x:Name="DialBtn" Content="발신 (F1)" Style="{StaticResource SuccessBtn}"
-                                    Width="170" Height="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
+                                    MinWidth="170" MinHeight="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
                             <Button x:Name="HangupBtn" Content="종료 (F2)" Style="{StaticResource DangerBtn}"
-                                    Width="170" Height="50" FontSize="15" FontWeight="Bold"
+                                    MinWidth="170" MinHeight="50" FontSize="15" FontWeight="Bold"
                                     Margin="14,0,0,0" IsEnabled="False" Click="Hangup_Click"/>
                             <TextBlock x:Name="TimerText" Text="00:00" FontSize="20" FontWeight="Bold"
                                        Foreground="{StaticResource B.Ink}" MinWidth="80"
@@ -233,7 +242,7 @@
                                      ToolTip="이번 통화 기록에 포함 · 최대 2000자"/>
                             <Button x:Name="SaveBtn" Grid.Row="0" Grid.Column="2" Grid.RowSpan="2"
                                     Content="저장하고 다음 (F3)"
-                                    Style="{StaticResource PrimaryBtn}" Width="176" Height="36"
+                                    Style="{StaticResource PrimaryBtn}" MinWidth="176" MinHeight="36"
                                     FontSize="13" FontWeight="Bold" Margin="8,0,0,0"
                                     VerticalAlignment="Top" IsEnabled="False" Click="Save_Click"/>
 
@@ -254,7 +263,7 @@
                                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <StackPanel Orientation="Horizontal">
                                         <DatePicker x:Name="CallbackDatePicker"
-                                                    Width="132" Height="34"
+                                                    MinWidth="132" MinHeight="34"
                                                     SelectedDateFormat="Short"
                                                     ToolTip="콜백 또는 상담예약 날짜"
                                                     SelectedDateChanged="CallbackDatePicker_SelectedDateChanged"/>
