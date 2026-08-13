@@ -11,7 +11,7 @@
             <StackPanel>
                 <Image x:Name="LogoImage" Width="160" Height="160" HorizontalAlignment="Center"/>
                 <TextBlock Text="CRM 계정으로 로그인하세요" FontSize="12"
-                           Foreground="{StaticResource B.Muted}"
+                           Foreground="{StaticResource B.MutedText}"
                            HorizontalAlignment="Center" Margin="0,8,0,2"/>
 
                 <TextBlock Text="아이디" Style="{StaticResource FieldLabel}"/>
@@ -29,11 +29,14 @@
                            FontSize="12" TextWrapping="Wrap" MinHeight="18" Margin="0,10,0,0"/>
 
                 <Button x:Name="SubmitBtn" Content="로그인" Style="{StaticResource PrimaryBtn}"
-                        Height="42" FontSize="14" FontWeight="Bold" Margin="0,8,0,6"
+                        MinHeight="42" FontSize="14" FontWeight="Bold" Margin="0,8,0,6"
                         Click="Submit_Click"/>
                 <Button Content="서버 주소 설정" Style="{StaticResource GhostBtn}"
-                        Background="Transparent" Foreground="{StaticResource B.Muted}"
-                        Height="28" FontSize="11" Click="ServerSettings_Click"/>
+                        Background="Transparent" Foreground="{StaticResource B.MutedText}"
+                        MinHeight="28" FontSize="11" Click="ServerSettings_Click"/>
+                <TextBlock x:Name="LoginVersionText" FontSize="11"
+                           Foreground="{StaticResource B.MutedText}"
+                           HorizontalAlignment="Center" Margin="0,10,0,0"/>
             </StackPanel>
         </Border>
     </Grid>

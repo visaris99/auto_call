@@ -1,13 +1,14 @@
 <Window x:Class="MilestoneDialer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Milestone Dialer" Height="700" Width="1060"
+        Title="Milestone Dialer" Height="780" Width="1060"
         MinHeight="620" MinWidth="960"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource B.Background}"
         FontFamily="{StaticResource AppFont}"
         PreviewKeyDown="Window_PreviewKeyDown"
         Closing="Window_Closing">
+    <Grid>
     <DockPanel>
         <!-- 상단 상태바 -->
         <Border DockPanel.Dock="Top" Background="{StaticResource B.Surface}"
@@ -16,13 +17,16 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <TextBlock x:Name="UpdateLink" FontSize="11" VerticalAlignment="Center"
                                Margin="0,0,14,0" Visibility="Collapsed">
-                        <Hyperlink Click="UpdateLink_Click" Foreground="{StaticResource B.Gold}">
+                        <Hyperlink Click="UpdateLink_Click" Foreground="{StaticResource B.GoldText}">
                             <Run x:Name="UpdateLinkRun" Text="새 버전 받기"/>
                         </Hyperlink>
                     </TextBlock>
                     <TextBlock x:Name="BannerText" FontSize="11" Foreground="{StaticResource B.Danger}"
                                VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <ComboBox x:Name="DeviceSelector" Width="150" Height="28"
+                    <!-- 커스텀 Select 템플릿은 DisplayMemberPath 선택 표시를 반영하지 못해
+                         장치 콤보는 기본 스타일을 유지한다. -->
+                    <ComboBox x:Name="DeviceSelector"
+                              Width="150" MinHeight="28"
                               Margin="0,0,10,0" FontSize="11"
                               DisplayMemberPath="Serial"
                               ToolTip="발신에 사용할 Android 장치"
@@ -31,12 +35,18 @@
                     <TextBlock x:Name="AdbDot" Text="● ADB" FontSize="12"
                                Foreground="{StaticResource B.Muted}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock x:Name="CrmDot" Text="● CRM" FontSize="12"
-                               Foreground="{StaticResource B.Muted}" VerticalAlignment="Center"/>
+                               Foreground="{StaticResource B.Muted}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="VersionText" FontSize="11"
+                               Foreground="{StaticResource B.MutedText}" VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <Button x:Name="LogoutBtn" Content="로그아웃" Style="{StaticResource GhostBtn}"
+                            FontSize="11" Padding="8,4" Click="Logout_Click"
+                            ToolTip="통화 중에는 로그아웃할 수 없습니다"/>
                 </StackPanel>
                 <TextBlock x:Name="UserText" FontWeight="Bold" FontSize="13"
                            Foreground="{StaticResource B.Ink}" VerticalAlignment="Center"/>
                 <TextBlock x:Name="TodayText" Text="오늘: 발신 0 · 가입 0" FontSize="12"
-                           Foreground="{StaticResource B.Gold}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                           Foreground="{StaticResource B.GoldText}" VerticalAlignment="Center" Margin="14,0,0,0"/>
             </DockPanel>
         </Border>
 
@@ -55,7 +65,7 @@
                         <TextBlock FontWeight="Bold" FontSize="13"
                                    Foreground="{StaticResource B.Ink}" VerticalAlignment="Center">
                             <Run Text="오늘의 콜 큐"/>
-                            <Run x:Name="QueueCountRun" Text="" Foreground="{StaticResource B.Muted}"/>
+                            <Run x:Name="QueueCountRun" Text="" Foreground="{StaticResource B.MutedText}"/>
                         </TextBlock>
                     </DockPanel>
                     <WrapPanel x:Name="FilterPanel" DockPanel.Dock="Top" Margin="4,0,4,6"/>
@@ -81,6 +91,10 @@
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Cursor" Value="Hand"/>
                                                 </Trigger>
+                                                <!-- 통화 중 리드 잠금이 눈에 보이게 -->
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter TargetName="bd" Property="Opacity" Value="0.55"/>
+                                                </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Setter.Value>
@@ -92,7 +106,7 @@
                                 <DockPanel>
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                         <TextBlock Text="{Binding TimeText}" FontSize="11"
-                                                   Foreground="{StaticResource B.Muted}"
+                                                   Foreground="{StaticResource B.MutedText}"
                                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
                                         <Border Background="{Binding BadgeBg}" CornerRadius="6" Padding="6,2">
                                             <TextBlock Text="{Binding StatusLabel}" FontSize="11"
@@ -133,15 +147,15 @@
                                      MaxLength="200" ToolTip="새 이름 입력"
                                      TextChanged="NameEditBox_TextChanged"/>
                             <Button x:Name="NameSaveBtn" Content="저장" Style="{StaticResource PrimaryBtn}"
-                                    Width="64" Height="34" FontSize="12" Margin="8,0,0,0" IsEnabled="False"
+                                    Width="64" MinHeight="34" FontSize="12" Margin="8,0,0,0" IsEnabled="False"
                                     Click="NameSave_Click"/>
                             <Button x:Name="NameCancelBtn" Content="취소" Style="{StaticResource GhostBtn}"
-                                    Width="64" Height="34" FontSize="12" Margin="6,0,0,0"
+                                    Width="64" MinHeight="34" FontSize="12" Margin="6,0,0,0"
                                     Click="NameCancel_Click"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <TextBlock x:Name="PhoneText" Text="-" FontSize="17"
-                                       Foreground="{StaticResource B.Gold}" VerticalAlignment="Center"/>
+                                       Foreground="{StaticResource B.GoldText}" VerticalAlignment="Center"/>
                             <Button x:Name="RevealContactBtn" Content="연락처 보기"
                                     Style="{StaticResource GhostBtn}"
                                     Width="96" MinHeight="30" FontSize="12" Margin="10,0,0,0"
@@ -150,14 +164,14 @@
                                     Width="86" MinHeight="30" FontSize="12" Margin="6,0,0,0"
                                     IsEnabled="False" Click="CopyLeadPhone_Click"/>
                         </StackPanel>
-                        <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.Muted}"
+                        <TextBlock x:Name="LeadMemoText" FontSize="12" Foreground="{StaticResource B.MutedText}"
                                    TextWrapping="Wrap" Margin="0,4,0,0"/>
                         <!-- 상담 이력 (서버 API 배포 후 자동 표시) -->
                         <ItemsControl x:Name="HistoryList" Margin="0,8,0,0" MaxHeight="88">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding}" FontSize="11"
-                                               Foreground="{StaticResource B.Muted}"
+                                               Foreground="{StaticResource B.MutedText}"
                                                TextTrimming="CharacterEllipsis" Margin="0,1"/>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -169,9 +183,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <Button x:Name="DialBtn" Content="발신 (F1)" Style="{StaticResource SuccessBtn}"
-                                    Width="170" Height="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
+                                    Width="170" MinHeight="50" FontSize="15" FontWeight="Bold" Click="Dial_Click"/>
                             <Button x:Name="HangupBtn" Content="종료 (F2)" Style="{StaticResource DangerBtn}"
-                                    Width="170" Height="50" FontSize="15" FontWeight="Bold"
+                                    Width="170" MinHeight="50" FontSize="15" FontWeight="Bold"
                                     Margin="14,0,0,0" IsEnabled="False" Click="Hangup_Click"/>
                             <TextBlock x:Name="TimerText" Text="00:00" FontSize="20" FontWeight="Bold"
                                        Foreground="{StaticResource B.Ink}" MinWidth="80"
@@ -183,17 +197,26 @@
                                       ToolTip="결과 저장 후 3초 뒤 다음 리드에 자동 발신 (ESC로 중단)"
                                       Checked="AutoDial_Toggled" Unchecked="AutoDial_Toggled"/>
                         </StackPanel>
+                        <!-- 통화 수명주기 상시 표시 + 일시 피드백(저장됨/안내) -->
+                        <Border x:Name="StatusStrip" CornerRadius="8" Padding="12,7"
+                                Margin="0,10,0,0" Background="{StaticResource B.Surface2}">
+                            <TextBlock x:Name="StatusStripText" FontSize="12" FontWeight="Bold"
+                                       Foreground="{StaticResource B.MutedText}"
+                                       TextAlignment="Center" TextWrapping="Wrap"
+                                       Text="대기 — 리드 선택 후 발신 (F1)"/>
+                        </Border>
                         <TextBlock x:Name="AdbHelpText" Text="ADB 연결 상태를 확인하는 중…"
-                                   FontSize="11" Foreground="{StaticResource B.Muted}"
+                                   FontSize="11" Foreground="{StaticResource B.MutedText}"
                                    TextAlignment="Center" TextWrapping="Wrap"
                                    Margin="0,8,0,0"/>
                         <!-- 수동 입력 번호를 담당 CRM 리드로 확인한 뒤 기존 승인 발신 흐름을 사용한다. -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0">
-                            <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.Muted}"
+                            <TextBlock Text="수동 발신" FontSize="11" Foreground="{StaticResource B.MutedText}"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox x:Name="ManualBox" Style="{StaticResource Input}" Width="180"
                                      MinHeight="32" FontSize="12"
-                                     ToolTip="배정된 고객 전화번호 입력 (하이픈·공백·+82 자동 정리)"/>
+                                     KeyDown="ManualBox_KeyDown"
+                                     ToolTip="배정된 고객 전화번호 입력 후 Enter (하이픈·공백·+82 자동 정리)"/>
                             <Button x:Name="ManualPasteBtn" Content="붙여넣기" Style="{StaticResource GhostBtn}"
                                     Width="86" MinHeight="32" FontSize="12" Margin="8,0,0,0"
                                     Click="ManualPaste_Click"/>
@@ -233,7 +256,7 @@
                                      ToolTip="이번 통화 기록에 포함 · 최대 2000자"/>
                             <Button x:Name="SaveBtn" Grid.Row="0" Grid.Column="2"
                                     Content="저장하고 다음 (F3)"
-                                    Style="{StaticResource PrimaryBtn}" Width="176" Height="36"
+                                    Style="{StaticResource PrimaryBtn}" Width="176" MinHeight="36"
                                     FontSize="13" FontWeight="Bold" Margin="8,0,0,0"
                                     VerticalAlignment="Top" IsEnabled="False" Click="Save_Click"/>
 
@@ -243,10 +266,6 @@
                                     BorderBrush="{StaticResource B.Line}" BorderThickness="1"
                                     CornerRadius="8" Visibility="Collapsed">
                                 <DockPanel>
-                                    <TextBlock x:Name="CallbackHint" DockPanel.Dock="Right"
-                                               Text="날짜와 시간을 모두 입력"
-                                               FontSize="11" Foreground="{StaticResource B.Muted}"
-                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
                                     <TextBlock x:Name="CallbackLabel" DockPanel.Dock="Left"
                                                Text="콜백 예약"
                                                FontSize="12" FontWeight="Bold"
@@ -254,37 +273,97 @@
                                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <StackPanel Orientation="Horizontal">
                                         <DatePicker x:Name="CallbackDatePicker"
+                                                    Style="{StaticResource DateSelect}"
                                                     Width="132" MinHeight="34"
                                                     SelectedDateFormat="Short"
                                                     ToolTip="콜백 또는 상담예약 날짜"
                                                     SelectedDateChanged="CallbackDatePicker_SelectedDateChanged"/>
-                                        <ComboBox x:Name="CallbackHourBox" Width="64" MinHeight="34"
-                                                  Margin="8,0,0,0" FontSize="13"
-                                                  VerticalContentAlignment="Center"
+                                        <ComboBox x:Name="CallbackHourBox" Style="{StaticResource Select}"
+                                                  Width="64" Margin="8,0,0,0"
                                                   ToolTip="시 (24시간제)"
                                                   SelectionChanged="CallbackTime_SelectionChanged"/>
                                         <TextBlock Text="시" FontSize="12"
                                                    Foreground="{StaticResource B.Foreground}"
                                                    VerticalAlignment="Center" Margin="4,0,0,0"/>
-                                        <ComboBox x:Name="CallbackMinuteBox" Width="64" MinHeight="34"
-                                                  Margin="8,0,0,0" FontSize="13"
-                                                  VerticalContentAlignment="Center"
+                                        <ComboBox x:Name="CallbackMinuteBox" Style="{StaticResource Select}"
+                                                  Width="64" Margin="8,0,0,0"
                                                   ToolTip="분 (5분 단위)"
                                                   SelectionChanged="CallbackTime_SelectionChanged"/>
                                         <TextBlock Text="분" FontSize="12"
                                                    Foreground="{StaticResource B.Foreground}"
                                                    VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                        <!-- 패널 배경(Surface2)과 겹치지 않게 흰 배경 -->
+                                        <Button Content="+30분" Style="{StaticResource GhostBtn}"
+                                                Background="{StaticResource B.Surface}"
+                                                MinHeight="30" MinWidth="56" FontSize="11"
+                                                Margin="14,0,0,0" Click="CallbackPreset30m_Click"/>
+                                        <Button Content="+2시간" Style="{StaticResource GhostBtn}"
+                                                Background="{StaticResource B.Surface}"
+                                                MinHeight="30" MinWidth="56" FontSize="11"
+                                                Margin="6,0,0,0" Click="CallbackPreset2h_Click"/>
+                                        <Button Content="내일 10시" Style="{StaticResource GhostBtn}"
+                                                Background="{StaticResource B.Surface}"
+                                                MinHeight="30" MinWidth="64" FontSize="11"
+                                                Margin="6,0,0,0" Click="CallbackPresetTomorrow_Click"/>
                                     </StackPanel>
                                 </DockPanel>
                             </Border>
                         </Grid>
-                        <TextBlock x:Name="SaveHintText" FontSize="12" FontWeight="Bold"
-                                   Foreground="{StaticResource B.Gold}" TextWrapping="Wrap"
-                                   Margin="0,8,0,0" Visibility="Collapsed"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
             </ScrollViewer>
         </Grid>
     </DockPanel>
+
+    <!-- F10 단축키 도움말 오버레이 — 아무 곳이나 클릭 또는 F10/Esc로 닫힘 -->
+    <Border x:Name="HelpOverlay" Background="#CC161410" Visibility="Collapsed"
+            MouseDown="HelpOverlay_MouseDown">
+        <Border Background="{StaticResource B.Surface}" CornerRadius="12" Padding="30,24"
+                HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="340">
+            <StackPanel>
+                <TextBlock Text="키보드 단축키" FontSize="15" FontWeight="Bold"
+                           Foreground="{StaticResource B.Ink}" Margin="0,0,0,12"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition/><RowDefinition/><RowDefinition/>
+                        <RowDefinition/><RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <Grid.Resources>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource B.Surface2}"/>
+                            <Setter Property="CornerRadius" Value="6"/>
+                            <Setter Property="Padding" Value="10,4"/>
+                            <Setter Property="Margin" Value="0,3,12,3"/>
+                            <Setter Property="HorizontalAlignment" Value="Left"/>
+                            <Setter Property="MinWidth" Value="72"/>
+                        </Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="FontSize" Value="13"/>
+                            <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                        </Style>
+                    </Grid.Resources>
+                    <Border Grid.Row="0"><TextBlock Text="F1" FontWeight="Bold" TextAlignment="Center"/></Border>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="발신"/>
+                    <Border Grid.Row="1"><TextBlock Text="F2" FontWeight="Bold" TextAlignment="Center"/></Border>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="통화 종료"/>
+                    <Border Grid.Row="2"><TextBlock Text="F3" FontWeight="Bold" TextAlignment="Center"/></Border>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="저장하고 다음 리드"/>
+                    <Border Grid.Row="3"><TextBlock Text="1~9 · 0" FontWeight="Bold" TextAlignment="Center"/></Border>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="상담 결과 선택 (통화 중·종료 후)"/>
+                    <Border Grid.Row="4"><TextBlock Text="F10" FontWeight="Bold" TextAlignment="Center"/></Border>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="이 도움말 열기/닫기"/>
+                </Grid>
+                <TextBlock Text="아무 곳이나 클릭하면 닫힙니다" FontSize="11"
+                           Foreground="{StaticResource B.MutedText}" Margin="0,14,0,0"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Border>
+    </Grid>
 </Window>

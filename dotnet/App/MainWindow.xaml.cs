@@ -79,13 +79,17 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly DispatcherTimer _heartbeatTimer = new() { Interval = TimeSpan.FromSeconds(60) };
     private readonly DispatcherTimer _bannerTimer = new() { Interval = TimeSpan.FromSeconds(5) };
-    private readonly DispatcherTimer _saveHintTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private readonly DispatcherTimer _stripTimer = new() { Interval = TimeSpan.FromSeconds(4) };
+    private bool _stripFlashing;
 
     internal bool IsCallSessionIdle => _callSession.State == CallSessionState.Idle;
 
     public MainWindow(ApiClient client, AppConfig config)
     {
         InitializeComponent();
+        // 콜백 패널까지 스크롤 없이 보이도록 기본 높이를 키우되(780),
+        // 작은 화면(768p 노트북 등)에서는 작업영역 안에 맞춘다.
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height - 12);
         _client = client;
         _config = config;
         _serverInsightsEnabled = AppConfig.IsServerInsightsEnabled();
@@ -93,6 +97,7 @@ public partial class MainWindow : Window
         _completedLeadIds = new HashSet<string>(
             _pending.Items.Select(item => item.LeadId), StringComparer.Ordinal);
         UserText.Text = $"{client.User?.OrgName} · {client.User?.Name}";
+        VersionText.Text = $"v{Ui.Version}";
         BuildResultButtons();
         BuildFilterChips();
         InitCallbackTimeOptions();
@@ -141,11 +146,11 @@ public partial class MainWindow : Window
             _bannerTimer.Stop();
             UpdateBanner();
         };
-        _saveHintTimer.Tick += (_, _) =>
+        _stripTimer.Tick += (_, _) =>
         {
-            _saveHintTimer.Stop();
-            SaveHintText.Text = "";
-            SaveHintText.Visibility = Visibility.Collapsed;
+            _stripTimer.Stop();
+            _stripFlashing = false;
+            UpdateStatusStrip();
         };
         _tickTimer.Start();
         _queueTimer.Start();
@@ -155,7 +160,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _tickTimer.Stop(); _queueTimer.Stop(); _adbTimer.Stop(); _flushTimer.Stop();
-            _heartbeatTimer.Stop(); _bannerTimer.Stop(); _saveHintTimer.Stop();
+            _heartbeatTimer.Stop(); _bannerTimer.Stop(); _stripTimer.Stop();
             _tray?.Dispose();
         };
 
@@ -193,7 +198,6 @@ public partial class MainWindow : Window
             else if (_sawOffhook)
             {
                 MarkCallEnded();
-                FlashBanner("통화 종료 감지 — 결과를 선택하세요");
             }
         }
         finally
@@ -299,11 +303,19 @@ public partial class MainWindow : Window
         if (_pending.LoadError != null)
             parts.Add("전송 대기열 확인 필요");
         BannerText.Text = string.Join(" · ", parts);
+        BannerText.Foreground = Ui.Brush("#B3372C");
         BannerText.ToolTip = _pending.LoadError ?? _pending.RecoveryFilePath;
     }
 
-    private void SetCrm(bool ok) =>
+    private void SetCrm(bool ok)
+    {
+        // 색과 텍스트를 함께 바꾼다 — 상태를 색상에만 의존해 전달하지 않는다(PRODUCT.md).
         CrmDot.Foreground = Ui.Brush(ok ? "#1A7F4B" : "#B3372C");
+        CrmDot.Text = ok ? "● CRM" : "● CRM 끊김";
+        CrmDot.ToolTip = ok
+            ? "CRM 연결 정상"
+            : "CRM 서버에 연결할 수 없습니다 — 저장 못 한 기록은 대기열에 보관됩니다";
+    }
 
     private void SetAdb(bool ok)
     {
@@ -435,24 +447,48 @@ public partial class MainWindow : Window
         }
     }
 
-    private void FlashBanner(string message)
+    /// <summary>상단 배너 일시 표시. 성공은 초록, 문제는 빨강 — 5초 뒤 대기열 상태로 복귀.</summary>
+    private void FlashBanner(string message, string colorHex = "#B3372C")
     {
         BannerText.Text = message;
+        BannerText.Foreground = Ui.Brush(colorHex);
         _bannerTimer.Stop();
         _bannerTimer.Start();
     }
 
-    /// <summary>저장 실행 조건(Ended 상태)에 어긋난 F3/저장 시도를 안내하는 인라인 메시지.</summary>
-    private void FlashSaveHint(string message)
+    /// <summary>상태 스트립 일시 피드백(저장 결과·저장 불가 안내) — 4초 뒤 통화 상태 표시로 복귀.</summary>
+    private void StripFlash(string message, bool success = false)
     {
-        SaveHintText.Text = message;
-        SaveHintText.Visibility = Visibility.Visible;
-        _saveHintTimer.Stop();
-        _saveHintTimer.Start();
+        _stripFlashing = true;
+        StatusStripText.Text = message;
+        StatusStrip.Background = Ui.Brush(success ? "#E2F0E8" : "#F7E2DF");
+        StatusStripText.Foreground = Ui.Brush(success ? "#1A7F4B" : "#B3372C");
+        _stripTimer.Stop();
+        _stripTimer.Start();
+    }
+
+    /// <summary>통화 수명주기를 항상 문장으로 보여주는 상시 스트립.</summary>
+    private void UpdateStatusStrip()
+    {
+        if (_stripFlashing)
+            return;
+        var (text, bg, fg) = _callSession.State switch
+        {
+            CallSessionState.Authorizing => ("CRM 발신 승인 확인 중…", "#F6EFBE", "#161410"),
+            CallSessionState.Dialing => ("발신 중 — 고객 응답 대기", "#E2F0E8", "#1A7F4B"),
+            CallSessionState.Active => ("통화 중 — 결과를 미리 선택해두세요", "#E2F0E8", "#1A7F4B"),
+            CallSessionState.Ending => ("통화 종료 확인 중…", "#F6EFBE", "#161410"),
+            CallSessionState.Ended => ("통화 종료 — 결과 선택 후 저장 (F3)", "#F6EFBE", "#161410"),
+            CallSessionState.Saving => ("저장 중…", "#F6EFBE", "#161410"),
+            _ => ("대기 — 리드 선택 후 발신 (F1)", "#FAF8F2", "#6E6A5E"),
+        };
+        StatusStripText.Text = text;
+        StatusStrip.Background = Ui.Brush(bg);
+        StatusStripText.Foreground = Ui.Brush(fg);
     }
 
     internal void ShowDeferredUpdateNotice() =>
-        FlashBanner("업데이트는 통화 결과 저장 후 설치됩니다.");
+        FlashBanner("업데이트는 통화 결과 저장 후 설치됩니다.", "#161410");
 
     // ---------- 큐 ----------
 
@@ -743,7 +779,7 @@ public partial class MainWindow : Window
         try
         {
             Clipboard.SetText(phone);
-            FlashBanner("전화번호를 복사했습니다.");
+            FlashBanner("전화번호를 복사했습니다.", "#1A7F4B");
             await Task.Delay(TimeSpan.FromSeconds(60));
             if (token == _clipboardToken && Clipboard.ContainsText()
                 && Clipboard.GetText() == phone)
@@ -752,8 +788,7 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException
                                    or InvalidOperationException)
         {
-            MessageBox.Show("클립보드에 전화번호를 복사하지 못했습니다.", "번호 복사",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            FlashBanner("클립보드에 전화번호를 복사하지 못했습니다");
         }
     }
 
@@ -843,7 +878,7 @@ public partial class MainWindow : Window
             NameEditPanel.Visibility = Visibility.Collapsed;
             NameEditBox.Text = "";
             RenderQueue();
-            FlashBanner("이름 저장됨");
+            FlashBanner("이름 저장됨", "#1A7F4B");
         }
         catch (AuthException)
         {
@@ -868,8 +903,7 @@ public partial class MainWindow : Window
             return;
         if (_adbSerial == null)
         {
-            MessageBox.Show("발신할 Android 장치를 먼저 선택하세요.", "ADB 장치",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            StripFlash("발신할 Android 장치를 먼저 연결·선택하세요");
             return;
         }
 
@@ -968,10 +1002,7 @@ public partial class MainWindow : Window
                     MarkCallEnded();
                     _manualEndConfirmed = _callSession.State == CallSessionState.Ended;
                     if (_manualEndConfirmed)
-                    {
-                        FlashBanner("수동으로 통화 종료 확인 — 결과를 선택하세요");
                         return true;
-                    }
                 }
             }
         }
@@ -992,7 +1023,6 @@ public partial class MainWindow : Window
 
         if (_callSession.State != CallSessionState.Ended)
             MarkCallEnded();
-        FlashBanner("통화 종료 확인 — 결과를 선택하세요");
         return _callSession.State == CallSessionState.Ended;
     }
 
@@ -1014,15 +1044,13 @@ public partial class MainWindow : Window
             return;
         if (!_adbConnected || _adbSerial == null)
         {
-            MessageBox.Show("발신할 Android 장치를 먼저 선택하세요.", "수동 발신",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            StripFlash("발신할 Android 장치를 먼저 연결·선택하세요");
             return;
         }
         string phone = QueueLogic.PhoneDigits(ManualBox.Text);
         if (phone.Length is < 9 or > 11)
         {
-            MessageBox.Show("전화번호 형식을 확인하세요.", "수동 발신",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            StripFlash("전화번호 형식을 확인하세요 (9~11자리 숫자)");
             return;
         }
 
@@ -1066,8 +1094,7 @@ public partial class MainWindow : Window
         }
         catch (System.Runtime.InteropServices.COMException)
         {
-            MessageBox.Show("클립보드 내용을 읽지 못했습니다.", "붙여넣기",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            StripFlash("클립보드 내용을 읽지 못했습니다");
         }
     }
 
@@ -1107,6 +1134,7 @@ public partial class MainWindow : Window
         DialBtn.Content = state == CallSessionState.Authorizing ? "확인 중…" : "발신 (F1)";
         HangupBtn.Content = state == CallSessionState.Ending ? "종료 확인 중…" : "종료 (F2)";
         SaveBtn.Content = state == CallSessionState.Saving ? "저장 중…" : "저장하고 다음 (F3)";
+        UpdateStatusStrip();
     }
 
     private ScheduledTimeResult CurrentScheduledTime(DateTimeOffset now)
@@ -1160,7 +1188,7 @@ public partial class MainWindow : Window
             {
                 Style = (Style)FindResource("ResultToggle"),
                 Background = bg,
-                Height = 48,
+                MinHeight = 48,
                 FontSize = 12,
                 Margin = new Thickness(3, 0, 3, 0),
                 Content = content,
@@ -1190,7 +1218,6 @@ public partial class MainWindow : Window
         bool needsTime = CallWorkflowPolicy.NeedsScheduledTime(code);
         CallbackPanel.Visibility = needsTime ? Visibility.Visible : Visibility.Collapsed;
         CallbackLabel.Text = code == "APPOINTMENT" ? "상담예약" : "콜백 예약";
-        CallbackHint.Text = "날짜와 시간을 선택";
         if (needsTime)
         {
             // 기본값: 1시간 뒤 정시 (자정을 넘기면 날짜도 다음날로). 이미 고른 값은 유지.
@@ -1213,6 +1240,36 @@ public partial class MainWindow : Window
         object sender,
         SelectionChangedEventArgs e) =>
         UpdateCallControls();
+
+    private void CallbackPreset30m_Click(object sender, RoutedEventArgs e) =>
+        ApplyCallbackPreset(DateTime.Now.AddMinutes(30));
+
+    private void CallbackPreset2h_Click(object sender, RoutedEventArgs e) =>
+        ApplyCallbackPreset(DateTime.Now.AddHours(2));
+
+    private void CallbackPresetTomorrow_Click(object sender, RoutedEventArgs e) =>
+        ApplyCallbackPreset(DateTime.Today.AddDays(1).AddHours(10));
+
+    private void ApplyCallbackPreset(DateTime target)
+    {
+        int rounded = (target.Minute + 4) / 5 * 5;   // 드롭다운 항목에 맞춰 5분 단위 올림
+        target = target.AddMinutes(rounded - target.Minute);
+        CallbackDatePicker.SelectedDate = target.Date;
+        CallbackHourBox.SelectedItem = target.Hour.ToString("00");
+        CallbackMinuteBox.SelectedItem = target.Minute.ToString("00");
+        UpdateCallControls();
+    }
+
+    private void ManualBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        e.Handled = true;
+        ManualDial_Click(this, new RoutedEventArgs());
+    }
+
+    private void HelpOverlay_MouseDown(object sender, MouseButtonEventArgs e) =>
+        HelpOverlay.Visibility = Visibility.Collapsed;
 
     private void CallbackDatePicker_SelectedDateChanged(
         object sender,
@@ -1237,8 +1294,7 @@ public partial class MainWindow : Window
         CallSessionSnapshot? currentSession = _callSession.Current;
         if (currentSession == null)
         {
-            MessageBox.Show("먼저 선택한 고객에게 발신하세요.", "통화 기록",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            StripFlash("먼저 선택한 고객에게 발신하세요");
             return;
         }
         if (currentSession.State is CallSessionState.Authorizing
@@ -1247,14 +1303,14 @@ public partial class MainWindow : Window
         if (currentSession.State is CallSessionState.Dialing or CallSessionState.Active)
         {
             // 저장은 통화종료(Ended)에서만 실행 — 통화를 끊지 않고 인라인 안내만 표시한다.
-            FlashSaveHint("통화를 먼저 종료(F2)한 뒤 저장하세요");
+            StripFlash("통화를 먼저 종료(F2)한 뒤 저장하세요");
             return;
         }
         if (currentSession.State != CallSessionState.Ended)
             return;
         if (_selectedResult == null)
         {
-            FlashSaveHint("상담 결과를 먼저 선택하세요");
+            StripFlash("상담 결과를 먼저 선택하세요");
             return;
         }
         string? callbackAt = null;
@@ -1265,14 +1321,12 @@ public partial class MainWindow : Window
             if (!scheduled.IsValid)
             {
                 string subject = _selectedResult == "APPOINTMENT" ? "상담예약" : "콜백";
-                string message = scheduled.Error switch
+                StripFlash(scheduled.Error switch
                 {
-                    ScheduledTimeError.MissingDate => $"{subject} 날짜를 선택하세요.",
-                    ScheduledTimeError.NotFuture => $"{subject} 날짜와 시간이 이미 지났습니다.",
-                    _ => $"{subject} 시와 분을 선택하세요.",
-                };
-                MessageBox.Show(message, "예약 시간 확인",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                    ScheduledTimeError.MissingDate => $"{subject} 날짜를 선택하세요",
+                    ScheduledTimeError.NotFuture => $"{subject} 시간이 이미 지났습니다 — 다시 선택하세요",
+                    _ => $"{subject} 시와 분을 선택하세요",
+                });
                 return;
             }
             if (_selectedResult == "CALLBACK")
@@ -1315,7 +1369,7 @@ public partial class MainWindow : Window
             CompleteSavedSession(code);
             UpdateBanner();
             SetCrm(false);
-            FlashBanner("연결 실패 — 기록을 대기열에 보관했습니다");
+            StripFlash("연결 실패 — 기록을 대기열에 보관했습니다 (자동 재전송)");
             ResumeAuthNavigationAfterResult();
         }
         catch (AuthException)
@@ -1335,7 +1389,7 @@ public partial class MainWindow : Window
             CompleteSavedSession(code);
             UpdateBanner();
             SetCrm(false);
-            FlashBanner("서버 일시 오류 — 기록을 대기열에 보관했습니다");
+            StripFlash("서버 일시 오류 — 기록을 대기열에 보관했습니다 (자동 재전송)");
             ResumeAuthNavigationAfterResult();
         }
         catch (Exception ex)
@@ -1377,9 +1431,9 @@ public partial class MainWindow : Window
         _leads = _leads.Where(item => item.Id != completed.LeadId).ToList();
         _current = null;
         RenderQueue();
-        if (showSavedFeedback)
-            FlashBanner(feedback);
         Select(FirstSelectableLead(FilteredLeads()));
+        if (showSavedFeedback)
+            StripFlash(feedback, success: true);
     }
 
     private void ResumeAuthNavigationAfterResult()
@@ -1421,6 +1475,7 @@ public partial class MainWindow : Window
     private void HandleError(Exception ex)
     {
         _lastError = ex.Message;
+        string user = $"{_client.User?.OrgName} · {_client.User?.Name}";
         switch (ex)
         {
             case AuthException:
@@ -1428,28 +1483,53 @@ public partial class MainWindow : Window
                 break;
             case NetworkException network:
                 SetCrm(false);
-                MessageBox.Show(network.Message, "연결 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                ErrorDialogWindow.Show(this, "연결 오류", network.Code, network.Message,
+                    "인터넷 연결과 CRM 서버 상태를 확인한 뒤 다시 시도하세요. "
+                    + "저장하지 못한 통화 기록은 대기열에 보관돼 자동 재전송됩니다.", user);
                 break;
             case NightBlockedException night:
-                MessageBox.Show($"{night.Message}\n오류 코드: {night.Code}", "야간 제한",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                ErrorDialogWindow.Show(this, "야간 발신 제한", night.Code, night.Message,
+                    "야간에는 발신할 수 없습니다. 콜백예약으로 다음 영업시간에 다시 연락하세요.", user);
                 break;
-            case DncBlockedException:
-                MessageBox.Show(
-                    DncBlockedException.UserMessage,
-                    "수신거부 발신 차단",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+            case DncBlockedException dnc:
+                // 사용자에게 새로고침을 시키는 대신 앱이 직접 큐를 갱신한다.
+                _ = RefreshQueueAsync();
+                ErrorDialogWindow.Show(this, "수신거부 발신 차단", dnc.Code,
+                    "수신거부(DNC) 고객이라 발신이 차단되었습니다.",
+                    "큐를 자동으로 새로고침했습니다. 다음 리드로 진행하세요.", user);
                 break;
             case ApiException api:
-                MessageBox.Show($"{api.Message}\n오류 코드: {api.Code}", "오류",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                ErrorDialogWindow.Show(this, "요청 실패", api.Code, api.Message,
+                    "잠시 후 다시 시도하세요. 같은 오류가 반복되면 "
+                    + "'관리자 보고 복사'로 내용을 전달하세요.", user);
                 break;
             default:
                 App.LogError(ex.ToString());
-                MessageBox.Show(ex.Message, "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                ErrorDialogWindow.Show(this, "예기치 못한 오류", ex.GetType().Name, ex.Message,
+                    "앱은 계속 사용할 수 있습니다. 같은 문제가 반복되면 "
+                    + "'관리자 보고 복사'로 내용을 전달하세요.", user);
                 break;
         }
+    }
+
+    private async void Logout_Click(object sender, RoutedEventArgs e)
+    {
+        if (_callSession.State != CallSessionState.Idle)
+        {
+            StripFlash("통화 작업이 진행 중입니다 — 종료·저장 후 로그아웃하세요");
+            return;
+        }
+        if (MessageBox.Show("로그아웃하고 로그인 화면으로 돌아갈까요?", "로그아웃",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        _callSession.Abandon();
+        ResetCallUi();
+        await _client.LogoutAsync();
+        var login = new LoginWindow();
+        Application.Current.MainWindow = login;
+        login.Show();
+        _allowClose = true;
+        Close();
     }
 
     private async void OnAuthLost(bool showMessage = true)
@@ -1538,7 +1618,7 @@ public partial class MainWindow : Window
             if (_manualEndConfirmed)
             {
                 _closing = false;
-                FlashSaveHint("통화 종료 상태로 전환했습니다. 결과를 저장한 뒤 종료하세요");
+                StripFlash("통화 종료 상태로 전환했습니다 — 결과를 저장한 뒤 종료하세요");
                 MessageBox.Show(
                     "통화 종료 상태로 전환했습니다.\n결과를 저장한 뒤 앱을 종료하세요.",
                     "결과 저장 가능",
@@ -1607,9 +1687,24 @@ public partial class MainWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // F10은 시스템 키(메뉴 활성화)로 들어오므로 SystemKey로 판별한다.
+        if (e.Key == Key.System && e.SystemKey == Key.F10)
+        {
+            HelpOverlay.Visibility = HelpOverlay.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            e.Handled = true;
+            return;
+        }
         switch (e.Key)
         {
             case Key.Escape:
+                if (HelpOverlay.Visibility == Visibility.Visible)
+                {
+                    HelpOverlay.Visibility = Visibility.Collapsed;
+                    e.Handled = true;
+                    return;
+                }
                 CancelAutoDial();
                 e.Handled = true;
                 return;

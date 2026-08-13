@@ -19,6 +19,12 @@
     <SolidColorBrush x:Key="B.SuccessSoft" Color="#E2F0E8"/>
     <SolidColorBrush x:Key="B.Muted" Color="#8A857A"/>
 
+    <!-- 텍스트 가독용 파생 토큰 — 흰 배경 대비 4.5:1 이상.
+         장식·배지용 원본(B.Muted/B.Gold)은 CRM과 동일하게 유지하고,
+         11~13px 본문 텍스트에는 이 진한 변형을 쓴다. -->
+    <SolidColorBrush x:Key="B.MutedText" Color="#6E6A5E"/>
+    <SolidColorBrush x:Key="B.GoldText" Color="#8A6F15"/>
+
     <!-- 폰트: 나눔고딕 설치 시 우선, 없으면 맑은 고딕 (WPF 네이티브 폴백) -->
     <FontFamily x:Key="AppFont">나눔고딕, Malgun Gothic</FontFamily>
 
@@ -40,13 +46,17 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8"
+                            BorderThickness="1.5" BorderBrush="Transparent">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
@@ -81,7 +91,8 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8"
+                            BorderThickness="1.5" BorderBrush="Transparent">
                         <ContentPresenter x:Name="cp" HorizontalAlignment="Center" VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"/>
                     </Border>
@@ -89,11 +100,17 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
                         </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Ink}"/>
                             <!-- 결과 버튼은 상태색을 로컬 Foreground로 받으므로(우선순위가 스타일 트리거보다
                                  높음) 체크 시 글자색은 ContentPresenter에 직접 지정해야 적용된다. -->
                             <Setter TargetName="cp" Property="TextElement.Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="bd" Property="Opacity" Value="0.45"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -183,10 +200,16 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Hover}"/>
                         </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource B.Ink}"/>
                             <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Ink}"/>
                             <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="bd" Property="Opacity" Value="0.5"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -198,8 +221,104 @@
     <Style x:Key="FieldLabel" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="Foreground" Value="{StaticResource B.Muted}"/>
+        <Setter Property="Foreground" Value="{StaticResource B.MutedText}"/>
         <Setter Property="Margin" Value="0,10,0,4"/>
+    </Style>
+
+    <!-- 드롭다운 선택 — Input과 동일한 라운드·골드 포커스 링 -->
+    <Style x:Key="Select" TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
+        <Setter Property="Background" Value="{StaticResource B.Surface}"/>
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{StaticResource B.Line}" BorderThickness="1"
+                                CornerRadius="8"/>
+                        <ToggleButton Focusable="False" ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                                  RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent"/>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          Margin="10,0,24,0" VerticalAlignment="Center"
+                                          IsHitTestVisible="False"/>
+                        <Path Data="M0,0 L4,4 8,0" Stroke="{StaticResource B.MutedText}"
+                              StrokeThickness="1.5" HorizontalAlignment="Right"
+                              VerticalAlignment="Center" Margin="0,1,9,0" IsHitTestVisible="False"/>
+                        <Popup IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True"
+                               Placement="Bottom" StaysOpen="False">
+                            <Border Background="{StaticResource B.Surface}"
+                                    BorderBrush="{StaticResource B.Line}" BorderThickness="1"
+                                    CornerRadius="8" Margin="0,4,0,0"
+                                    MinWidth="{TemplateBinding ActualWidth}" MaxHeight="220">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Padding" Value="10,6"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="ibd" Background="Transparent"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="ibd" Property="Background"
+                                                Value="{StaticResource B.Hover}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- DatePicker — 기본 템플릿 유지, 폰트·테두리·포커스만 정합 -->
+    <Style x:Key="DateSelect" TargetType="DatePicker">
+        <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="Background" Value="{StaticResource B.Surface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource B.Line}"/>
+        <Setter Property="Foreground" Value="{StaticResource B.Foreground}"/>
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource B.Gold}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
 </ResourceDictionary>

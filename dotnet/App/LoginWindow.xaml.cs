@@ -17,6 +17,7 @@ public partial class LoginWindow : Window
     {
         InitializeComponent();
         _client = new ApiClient(_config.ServerUrl);
+        LoginVersionText.Text = $"Milestone Dialer v{Ui.Version}";
         IdBox.Text = _config.LastLoginId;  // 아이디는 한글 허용
         try
         {
@@ -141,7 +142,7 @@ public partial class LoginWindow : Window
         panel.Children.Add(ok);
         var dialog = new Window
         {
-            Title = "서버 주소", Width = 420, Height = 205, Owner = this,
+            Title = "서버 주소", Width = 420, SizeToContent = SizeToContent.Height, Owner = this,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize, Content = panel,
             Background = (System.Windows.Media.Brush)FindResource("B.Background"),
