@@ -51,11 +51,23 @@ public partial class LoginWindow : Window
             if (e.Key == Key.Enter)
                 Submit_Click(this, new RoutedEventArgs());
         };
+        // 비밀번호 입력 중 Caps Lock 상태를 안내 — 실패 후에야 알게 되는 것 방지
+        PwBox.GotKeyboardFocus += (_, _) => UpdateCapsLockHint();
+        PwBox.LostKeyboardFocus += (_, _) => UpdateCapsLockHint();
+        PwBox.PreviewKeyUp += (_, _) => UpdateCapsLockHint();
         Loaded += (_, _) =>
         {
             if (string.IsNullOrEmpty(IdBox.Text)) IdBox.Focus();
             else PwBox.Focus();
         };
+    }
+
+    private void UpdateCapsLockHint()
+    {
+        CapsLockHint.Visibility =
+            PwBox.IsKeyboardFocused && Keyboard.IsKeyToggled(Key.CapsLock)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
     }
 
     private async void Submit_Click(object sender, RoutedEventArgs e)

@@ -25,8 +25,8 @@
     <SolidColorBrush x:Key="B.MutedText" Color="#6E6A5E"/>
     <SolidColorBrush x:Key="B.GoldText" Color="#8A6F15"/>
 
-    <!-- 폰트: 나눔고딕 설치 시 우선, 없으면 맑은 고딕 (WPF 네이티브 폴백) -->
-    <FontFamily x:Key="AppFont">나눔고딕, Malgun Gothic</FontFamily>
+    <!-- 폰트: 앱에 번들된 나눔고딕(전 PC 동일 렌더링), 예외 상황 폴백은 맑은 고딕 -->
+    <FontFamily x:Key="AppFont">pack://application:,,,/Fonts/#NanumGothic, Malgun Gothic</FontFamily>
 
     <!-- 카드 -->
     <Style x:Key="Card" TargetType="Border">

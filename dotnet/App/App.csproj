@@ -34,4 +34,13 @@
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- 나눔고딕 번들 — PC별 설치 여부에 따른 렌더링 편차 제거.
+       SIL OFL 1.1 라이선스: 폰트를 배포물에 포함하려면 OFL.txt를 함께 배포해야 한다. -->
+  <ItemGroup>
+    <Resource Include="Fonts\NanumGothic-Regular.ttf" />
+    <Resource Include="Fonts\NanumGothic-Bold.ttf" />
+    <Resource Include="Fonts\NanumGothic-ExtraBold.ttf" />
+    <Content Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
