@@ -1,0 +1,33 @@
+<!-- 라이트 팔레트 — CRM(globals.css) 디자인 토큰과 동일 hex. 값 임의 변경 금지.
+     다크는 PaletteDark.xaml이 같은 키를 덮는다. ThemeManager가 시작 시/토글 시 교체. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SolidColorBrush x:Key="B.Background" Color="#F3F1EA"/>
+    <SolidColorBrush x:Key="B.Surface" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="B.Surface2" Color="#FAF8F2"/>
+    <SolidColorBrush x:Key="B.Foreground" Color="#211F1A"/>
+    <SolidColorBrush x:Key="B.Ink" Color="#161410"/>
+    <SolidColorBrush x:Key="B.Line" Color="#E8E3D8"/>
+    <SolidColorBrush x:Key="B.Hover" Color="#F0EBE0"/>
+    <SolidColorBrush x:Key="B.Brand" Color="#ECDF4A"/>
+    <SolidColorBrush x:Key="B.BrandSoft" Color="#F6EFBE"/>
+    <SolidColorBrush x:Key="B.Gold" Color="#A98A1F"/>
+    <SolidColorBrush x:Key="B.Danger" Color="#B3372C"/>
+    <SolidColorBrush x:Key="B.DangerSoft" Color="#F7E2DF"/>
+    <SolidColorBrush x:Key="B.Success" Color="#1A7F4B"/>
+    <SolidColorBrush x:Key="B.SuccessSoft" Color="#E2F0E8"/>
+    <SolidColorBrush x:Key="B.Muted" Color="#8A857A"/>
+
+    <!-- 텍스트 가독용 파생 토큰 — 배경 대비 4.5:1 이상 -->
+    <SolidColorBrush x:Key="B.MutedText" Color="#6E6A5E"/>
+    <SolidColorBrush x:Key="B.GoldText" Color="#8A6F15"/>
+    <SolidColorBrush x:Key="B.SuccessText" Color="#1A7F4B"/>
+    <SolidColorBrush x:Key="B.DangerText" Color="#B3372C"/>
+
+    <!-- 잉크 채움(PrimaryBtn·체크된 칩) 위의 글자색 -->
+    <SolidColorBrush x:Key="B.OnInk" Color="#FFFFFF"/>
+    <!-- 다크에서 어두운 로고 뒤에 깔리는 밝은 받침 (라이트에선 투명) -->
+    <SolidColorBrush x:Key="B.LogoBackdrop" Color="Transparent"/>
+
+</ResourceDictionary>

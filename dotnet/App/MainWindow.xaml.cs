@@ -98,6 +98,7 @@ public partial class MainWindow : Window
             _pending.Items.Select(item => item.LeadId), StringComparer.Ordinal);
         UserText.Text = $"{client.User?.OrgName} · {client.User?.Name}";
         VersionText.Text = $"v{Ui.Version}";
+        ThemeBtn.Content = ThemeManager.IsDark ? "라이트" : "다크";
         BuildResultButtons();
         BuildFilterChips();
         InitCallbackTimeOptions();
@@ -303,14 +304,18 @@ public partial class MainWindow : Window
         if (_pending.LoadError != null)
             parts.Add("전송 대기열 확인 필요");
         BannerText.Text = string.Join(" · ", parts);
-        BannerText.Foreground = Ui.Brush("#B3372C");
+        BannerText.Foreground = Ui.Token("B.DangerText");
         BannerText.ToolTip = _pending.LoadError ?? _pending.RecoveryFilePath;
     }
+
+    private bool? _crmOk;
+    private bool _adbCheckedOnce;
 
     private void SetCrm(bool ok)
     {
         // 색과 텍스트를 함께 바꾼다 — 상태를 색상에만 의존해 전달하지 않는다(PRODUCT.md).
-        CrmDot.Foreground = Ui.Brush(ok ? "#1A7F4B" : "#B3372C");
+        _crmOk = ok;
+        CrmDot.Foreground = Ui.Token(ok ? "B.SuccessText" : "B.DangerText");
         CrmDot.Text = ok ? "● CRM" : "● CRM 끊김";
         CrmDot.ToolTip = ok
             ? "CRM 연결 정상"
@@ -320,7 +325,8 @@ public partial class MainWindow : Window
     private void SetAdb(bool ok)
     {
         _adbConnected = ok;
-        AdbDot.Foreground = Ui.Brush(ok ? "#1A7F4B" : "#B3372C");
+        _adbCheckedOnce = true;
+        AdbDot.Foreground = Ui.Token(ok ? "B.SuccessText" : "B.DangerText");
     }
 
     private async Task RefreshAdbDevicesAsync()
@@ -371,7 +377,7 @@ public partial class MainWindow : Window
                         : devices.Count == 0
                             ? "USB 연결 후 개발자 옵션>USB 디버깅 켜기"
                             : "USB 연결 상태와 ADB 장치를 확인해주세요";
-            AdbHelpText.Foreground = Ui.Brush(selected != null ? "#1A7F4B" : "#B3372C");
+            AdbHelpText.Foreground = Ui.Token(selected != null ? "B.SuccessText" : "B.DangerText");
             SetAdb(selected != null);
             UpdateCallControls();
         }
@@ -401,7 +407,7 @@ public partial class MainWindow : Window
         TrySaveConfig();
         SetAdb(true);
         AdbHelpText.Text = $"ADB 연결됨 · {selected.Serial}";
-        AdbHelpText.Foreground = Ui.Brush("#1A7F4B");
+        AdbHelpText.Foreground = Ui.Token("B.SuccessText");
         UpdateCallControls();
     }
 
@@ -448,10 +454,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>상단 배너 일시 표시. 성공은 초록, 문제는 빨강 — 5초 뒤 대기열 상태로 복귀.</summary>
-    private void FlashBanner(string message, string colorHex = "#B3372C")
+    private void FlashBanner(string message, string colorToken = "B.DangerText")
     {
         BannerText.Text = message;
-        BannerText.Foreground = Ui.Brush(colorHex);
+        BannerText.Foreground = Ui.Token(colorToken);
         _bannerTimer.Stop();
         _bannerTimer.Start();
     }
@@ -461,8 +467,8 @@ public partial class MainWindow : Window
     {
         _stripFlashing = true;
         StatusStripText.Text = message;
-        StatusStrip.Background = Ui.Brush(success ? "#E2F0E8" : "#F7E2DF");
-        StatusStripText.Foreground = Ui.Brush(success ? "#1A7F4B" : "#B3372C");
+        StatusStrip.Background = Ui.Token(success ? "B.SuccessSoft" : "B.DangerSoft");
+        StatusStripText.Foreground = Ui.Token(success ? "B.SuccessText" : "B.DangerText");
         _stripTimer.Stop();
         _stripTimer.Start();
     }
@@ -474,21 +480,21 @@ public partial class MainWindow : Window
             return;
         var (text, bg, fg) = _callSession.State switch
         {
-            CallSessionState.Authorizing => ("CRM 발신 승인 확인 중…", "#F6EFBE", "#161410"),
-            CallSessionState.Dialing => ("발신 중 — 고객 응답 대기", "#E2F0E8", "#1A7F4B"),
-            CallSessionState.Active => ("통화 중 — 결과를 미리 선택해두세요", "#E2F0E8", "#1A7F4B"),
-            CallSessionState.Ending => ("통화 종료 확인 중…", "#F6EFBE", "#161410"),
-            CallSessionState.Ended => ("통화 종료 — 결과 선택 후 저장 (F3)", "#F6EFBE", "#161410"),
-            CallSessionState.Saving => ("저장 중…", "#F6EFBE", "#161410"),
-            _ => ("대기 — 리드 선택 후 발신 (F1)", "#FAF8F2", "#6E6A5E"),
+            CallSessionState.Authorizing => ("CRM 발신 승인 확인 중…", "B.BrandSoft", "B.Ink"),
+            CallSessionState.Dialing => ("발신 중 — 고객 응답 대기", "B.SuccessSoft", "B.SuccessText"),
+            CallSessionState.Active => ("통화 중 — 결과를 미리 선택해두세요", "B.SuccessSoft", "B.SuccessText"),
+            CallSessionState.Ending => ("통화 종료 확인 중…", "B.BrandSoft", "B.Ink"),
+            CallSessionState.Ended => ("통화 종료 — 결과 선택 후 저장 (F3)", "B.BrandSoft", "B.Ink"),
+            CallSessionState.Saving => ("저장 중…", "B.BrandSoft", "B.Ink"),
+            _ => ("대기 — 리드 선택 후 발신 (F1)", "B.Surface2", "B.MutedText"),
         };
         StatusStripText.Text = text;
-        StatusStrip.Background = Ui.Brush(bg);
-        StatusStripText.Foreground = Ui.Brush(fg);
+        StatusStrip.Background = Ui.Token(bg);
+        StatusStripText.Foreground = Ui.Token(fg);
     }
 
     internal void ShowDeferredUpdateNotice() =>
-        FlashBanner("업데이트는 통화 결과 저장 후 설치됩니다.", "#161410");
+        FlashBanner("업데이트는 통화 결과 저장 후 설치됩니다.", "B.Ink");
 
     // ---------- 큐 ----------
 
@@ -779,7 +785,7 @@ public partial class MainWindow : Window
         try
         {
             Clipboard.SetText(phone);
-            FlashBanner("전화번호를 복사했습니다.", "#1A7F4B");
+            FlashBanner("전화번호를 복사했습니다.", "B.SuccessText");
             await Task.Delay(TimeSpan.FromSeconds(60));
             if (token == _clipboardToken && Clipboard.ContainsText()
                 && Clipboard.GetText() == phone)
@@ -878,7 +884,7 @@ public partial class MainWindow : Window
             NameEditPanel.Visibility = Visibility.Collapsed;
             NameEditBox.Text = "";
             RenderQueue();
-            FlashBanner("이름 저장됨", "#1A7F4B");
+            FlashBanner("이름 저장됨", "B.SuccessText");
         }
         catch (AuthException)
         {
@@ -1195,8 +1201,7 @@ public partial class MainWindow : Window
             };
             // Content TextBlock은 버튼의 논리 트리 자식이라 템플릿 트리거의 글자색이
             // 상속되지 않는다. 체크 상태 전환 시 직접 색을 바꿔 잉크 배경 위에서도 읽히게 한다.
-            btn.Checked += (_, _) =>
-                content.Foreground = System.Windows.Media.Brushes.White;
+            btn.Checked += (_, _) => content.Foreground = Ui.Token("B.OnInk");
             btn.Unchecked += (_, _) => content.Foreground = fg;
             btn.Click += (_, _) => SelectResult(code);
             _resultButtons[code] = btn;
@@ -1510,6 +1515,35 @@ public partial class MainWindow : Window
                     + "'관리자 보고 복사'로 내용을 전달하세요.", user);
                 break;
         }
+    }
+
+    private void ThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool dark = !ThemeManager.IsDark;
+        ThemeManager.Apply(dark);
+        _config.Theme = dark ? "dark" : "light";
+        TrySaveConfig();
+        ThemeBtn.Content = dark ? "라이트" : "다크";
+        RefreshThemedVisuals();
+    }
+
+    /// <summary>코드에서 직접 칠한 색(스트립·배너·상태 점·칩 글자·큐 행)을 새 팔레트로 다시 그린다.</summary>
+    private void RefreshThemedVisuals()
+    {
+        UpdateBanner();
+        if (_crmOk is bool crmOk)
+            SetCrm(crmOk);
+        if (_adbCheckedOnce)
+            SetAdb(_adbConnected);
+        foreach (var (code, btn) in _resultButtons)
+        {
+            if (btn.Content is TextBlock text)
+                text.Foreground = btn.IsChecked == true
+                    ? Ui.Token("B.OnInk")
+                    : Ui.StatusColors(code).Fg;
+        }
+        RenderQueue();
+        UpdateCallControls();
     }
 
     private async void Logout_Click(object sender, RoutedEventArgs e)

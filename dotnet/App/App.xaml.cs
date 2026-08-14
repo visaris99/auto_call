@@ -35,6 +35,8 @@ public partial class App : Application
                 "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
+        // 창을 만들기 전에 저장된 테마를 적용한다 (DynamicResource라 이후 토글도 즉시 반영).
+        ThemeManager.Apply(AppConfig.Load().Theme == "dark");
         var login = new LoginWindow();
         MainWindow = login;
         login.Show();

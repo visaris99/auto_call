@@ -4,7 +4,7 @@
         Title="업데이트 설치" Width="430" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="ToolWindow"
-        Background="{StaticResource B.Background}"
+        Background="{DynamicResource B.Background}"
         FontFamily="{StaticResource AppFont}">
     <Grid Margin="24,20">
         <Grid.RowDefinitions>
@@ -13,10 +13,10 @@
         </Grid.RowDefinitions>
         <StackPanel>
             <TextBlock Text="통화가 진행 중입니다" FontSize="15" FontWeight="Bold"
-                       Foreground="{StaticResource B.Ink}"/>
+                       Foreground="{DynamicResource B.Ink}"/>
             <TextBlock Text="업데이트 파일 준비가 끝났습니다. 지금 설치하면 앱이 종료됩니다."
                        FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
-                       Foreground="{StaticResource B.Foreground}"/>
+                       Foreground="{DynamicResource B.Foreground}"/>
         </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"
                     Margin="0,18,0,0">

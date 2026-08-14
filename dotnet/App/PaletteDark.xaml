@@ -1,0 +1,30 @@
+<!-- 다크 팔레트 — Palette.xaml과 동일한 키. 따뜻한 저채도 다크(장시간 통화 업무용).
+     상태 배지·결과 칩 색(Ui.StatusColors)은 CRM 데이터 색이라 테마와 무관하게 유지된다. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SolidColorBrush x:Key="B.Background" Color="#1B1916"/>
+    <SolidColorBrush x:Key="B.Surface" Color="#262219"/>
+    <SolidColorBrush x:Key="B.Surface2" Color="#2F2A21"/>
+    <SolidColorBrush x:Key="B.Foreground" Color="#E8E3D8"/>
+    <SolidColorBrush x:Key="B.Ink" Color="#F3F1EA"/>
+    <SolidColorBrush x:Key="B.Line" Color="#3E382C"/>
+    <SolidColorBrush x:Key="B.Hover" Color="#3A342A"/>
+    <SolidColorBrush x:Key="B.Brand" Color="#ECDF4A"/>
+    <SolidColorBrush x:Key="B.BrandSoft" Color="#453D1E"/>
+    <SolidColorBrush x:Key="B.Gold" Color="#C9A73B"/>
+    <SolidColorBrush x:Key="B.Danger" Color="#C4473B"/>
+    <SolidColorBrush x:Key="B.DangerSoft" Color="#46251F"/>
+    <SolidColorBrush x:Key="B.Success" Color="#1F8A52"/>
+    <SolidColorBrush x:Key="B.SuccessSoft" Color="#1F3A2B"/>
+    <SolidColorBrush x:Key="B.Muted" Color="#6E685C"/>
+
+    <SolidColorBrush x:Key="B.MutedText" Color="#A9A295"/>
+    <SolidColorBrush x:Key="B.GoldText" Color="#D8B84F"/>
+    <SolidColorBrush x:Key="B.SuccessText" Color="#7FCBA4"/>
+    <SolidColorBrush x:Key="B.DangerText" Color="#E88A7D"/>
+
+    <SolidColorBrush x:Key="B.OnInk" Color="#1B1916"/>
+    <SolidColorBrush x:Key="B.LogoBackdrop" Color="#F3F1EA"/>
+
+</ResourceDictionary>

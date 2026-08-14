@@ -4,14 +4,14 @@
         Title="업데이트" Width="400" SizeToContent="Height"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         WindowStyle="ToolWindow" Topmost="True"
-        Background="{StaticResource B.Background}"
+        Background="{DynamicResource B.Background}"
         FontFamily="{StaticResource AppFont}">
     <StackPanel Margin="24,20">
         <TextBlock x:Name="StatusText" Text="새 버전을 다운로드하는 중…"
-                   FontSize="13" FontWeight="Bold" Foreground="{StaticResource B.Ink}"/>
+                   FontSize="13" FontWeight="Bold" Foreground="{DynamicResource B.Ink}"/>
         <ProgressBar x:Name="Progress" Height="10" Margin="0,14,0,0"
                      Minimum="0" Maximum="100"/>
         <TextBlock x:Name="DetailText" FontSize="11"
-                   Foreground="{StaticResource B.Muted}" Margin="0,8,0,0"/>
+                   Foreground="{DynamicResource B.Muted}" Margin="0,8,0,0"/>
     </StackPanel>
 </Window>

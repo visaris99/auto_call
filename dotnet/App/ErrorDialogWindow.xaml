@@ -4,30 +4,30 @@
         Title="오류" Width="460" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         WindowStyle="ToolWindow" ShowInTaskbar="False"
-        Background="{StaticResource B.Background}"
+        Background="{DynamicResource B.Background}"
         FontFamily="{StaticResource AppFont}">
     <StackPanel Margin="24,20">
         <StackPanel Orientation="Horizontal">
-            <Border x:Name="CodeBadge" Background="{StaticResource B.DangerSoft}"
+            <Border x:Name="CodeBadge" Background="{DynamicResource B.DangerSoft}"
                     CornerRadius="6" Padding="8,3" VerticalAlignment="Center">
                 <TextBlock x:Name="CodeText" FontSize="11" FontWeight="Bold"
-                           Foreground="{StaticResource B.Danger}"/>
+                           Foreground="{DynamicResource B.Danger}"/>
             </Border>
             <TextBlock x:Name="TitleText" FontSize="15" FontWeight="Bold"
-                       Foreground="{StaticResource B.Ink}"
+                       Foreground="{DynamicResource B.Ink}"
                        VerticalAlignment="Center" Margin="10,0,0,0"/>
         </StackPanel>
 
         <TextBlock x:Name="MessageText" FontSize="13" TextWrapping="Wrap"
-                   Foreground="{StaticResource B.Foreground}" Margin="0,12,0,0"/>
+                   Foreground="{DynamicResource B.Foreground}" Margin="0,12,0,0"/>
 
-        <Border Background="{StaticResource B.Surface2}" BorderBrush="{StaticResource B.Line}"
+        <Border Background="{DynamicResource B.Surface2}" BorderBrush="{DynamicResource B.Line}"
                 BorderThickness="1" CornerRadius="8" Padding="12,9" Margin="0,12,0,0">
             <StackPanel>
                 <TextBlock Text="다음 행동" FontSize="11" FontWeight="Bold"
-                           Foreground="{StaticResource B.MutedText}"/>
+                           Foreground="{DynamicResource B.MutedText}"/>
                 <TextBlock x:Name="NextActionText" FontSize="12" TextWrapping="Wrap"
-                           Foreground="{StaticResource B.Ink}" Margin="0,4,0,0"/>
+                           Foreground="{DynamicResource B.Ink}" Margin="0,4,0,0"/>
             </StackPanel>
         </Border>
 

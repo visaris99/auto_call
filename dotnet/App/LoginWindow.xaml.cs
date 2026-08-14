@@ -18,6 +18,7 @@ public partial class LoginWindow : Window
         InitializeComponent();
         _client = new ApiClient(_config.ServerUrl);
         LoginVersionText.Text = $"Milestone Dialer v{Ui.Version}";
+        LoginThemeBtn.Content = ThemeManager.IsDark ? "라이트 테마" : "다크 테마";
         IdBox.Text = _config.LastLoginId;  // 아이디는 한글 허용
         try
         {
@@ -60,6 +61,22 @@ public partial class LoginWindow : Window
             if (string.IsNullOrEmpty(IdBox.Text)) IdBox.Focus();
             else PwBox.Focus();
         };
+    }
+
+    private void ThemeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool dark = !ThemeManager.IsDark;
+        ThemeManager.Apply(dark);
+        _config.Theme = dark ? "dark" : "light";
+        try
+        {
+            _config.Save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 저장 실패해도 현재 세션 테마는 적용된다
+        }
+        LoginThemeBtn.Content = dark ? "라이트 테마" : "다크 테마";
     }
 
     private void UpdateCapsLockHint()

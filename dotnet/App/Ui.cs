@@ -1,4 +1,5 @@
 // UI 공용 헬퍼 — CRM 상태 라벨/색 매핑(ui/theme.py·badge.tsx와 동일), 결과 10종, 리스트 행 모델.
+using System.Windows;
 using System.Windows.Media;
 using Core;
 
@@ -6,7 +7,7 @@ namespace MilestoneDialer;
 
 public static class Ui
 {
-    public const string Version = "2.7.1";
+    public const string Version = "2.8.0";
 
     private static readonly Dictionary<string, Brush> Cache = new();
 
@@ -20,6 +21,10 @@ public static class Ui
         }
         return brush;
     }
+
+    /// <summary>현재 팔레트의 토큰 브러시 — 코드에서 색을 지정할 때 hex 대신 이것을 쓴다.</summary>
+    public static Brush Token(string key) =>
+        Application.Current?.TryFindResource(key) as Brush ?? Brushes.Transparent;
 
     private static readonly Dictionary<string, string> Labels = new()
     {
@@ -56,6 +61,23 @@ public static class Ui
         CallResultCatalog.Results;
 }
 
+/// <summary>다크/라이트 팔레트 교체. Theme.xaml 스타일이 전부 DynamicResource라 즉시 반영된다.</summary>
+public static class ThemeManager
+{
+    public static bool IsDark { get; private set; }
+
+    public static void Apply(bool dark)
+    {
+        IsDark = dark;
+        var merged = Application.Current.Resources.MergedDictionaries;
+        // App.xaml 병합 순서 계약: [0]=팔레트, [1]=Theme.xaml
+        merged[0] = new ResourceDictionary
+        {
+            Source = new Uri(dark ? "PaletteDark.xaml" : "Palette.xaml", UriKind.Relative),
+        };
+    }
+}
+
 /// <summary>큐 ListBox 한 행 — 표시에 필요한 값을 미리 계산해 바인딩.</summary>
 public sealed class LeadRow
 {
@@ -75,7 +97,7 @@ public sealed class LeadRow
         Name = string.IsNullOrEmpty(item.Name) ? "(이름없음)" : item.Name!;
         StatusLabel = Ui.LabelFor(item.Status);
         (BadgeBg, BadgeFg) = Ui.StatusColors(item.Status);
-        RowBrush = Due ? Ui.Brush("#F6EFBE") : Ui.Brush("#FFFFFF");
+        RowBrush = Due ? Ui.Token("B.BrandSoft") : Ui.Token("B.Surface");
         TimeText = QueueLogic.FormatCallbackTime(item.NextCallAt, now);
     }
 }

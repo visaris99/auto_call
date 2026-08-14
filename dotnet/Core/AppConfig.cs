@@ -30,6 +30,10 @@ public sealed class AppConfig
     [JsonPropertyName("adb_serial")]
     public string AdbSerial { get; set; } = "";
 
+    /// <summary>UI 테마 — "light"(기본) 또는 "dark".</summary>
+    [JsonPropertyName("theme")]
+    public string Theme { get; set; } = "light";
+
     public static bool TryNormalizeServerUrl(string input, out string normalized)
     {
         normalized = "";

@@ -3,15 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Milestone Dialer" Height="660" Width="480"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource B.Background}"
+        Background="{DynamicResource B.Background}"
         FontFamily="{StaticResource AppFont}">
     <Grid>
         <Border Style="{StaticResource Card}" Width="348" Padding="40,28"
                 VerticalAlignment="Center" HorizontalAlignment="Center">
             <StackPanel>
-                <Image x:Name="LogoImage" Width="160" Height="160" HorizontalAlignment="Center"/>
+                <!-- 어두운 로고가 다크 테마에서도 보이도록 밝은 받침(라이트에선 투명) -->
+                <Border Background="{DynamicResource B.LogoBackdrop}" CornerRadius="16"
+                        Padding="6" HorizontalAlignment="Center">
+                    <Image x:Name="LogoImage" Width="148" Height="148"/>
+                </Border>
                 <TextBlock Text="CRM 계정으로 로그인하세요" FontSize="12"
-                           Foreground="{StaticResource B.MutedText}"
+                           Foreground="{DynamicResource B.MutedText}"
                            HorizontalAlignment="Center" Margin="0,8,0,2"/>
 
                 <TextBlock Text="아이디" Style="{StaticResource FieldLabel}"/>
@@ -20,7 +24,7 @@
                 <TextBlock Text="비밀번호" Style="{StaticResource FieldLabel}"/>
                 <PasswordBox x:Name="PwBox" Style="{StaticResource InputPassword}"/>
                 <TextBlock x:Name="CapsLockHint" Text="⚠ Caps Lock이 켜져 있습니다"
-                           FontSize="11" Foreground="{StaticResource B.GoldText}"
+                           FontSize="11" Foreground="{DynamicResource B.GoldText}"
                            Margin="0,4,0,0" Visibility="Collapsed"/>
 
                 <TextBlock x:Name="MfaLabel" Text="인증앱 6자리 코드"
@@ -28,18 +32,22 @@
                 <TextBox x:Name="MfaBox" Style="{StaticResource Input}"
                          Visibility="Collapsed"/>
 
-                <TextBlock x:Name="ErrorText" Foreground="{StaticResource B.Danger}"
+                <TextBlock x:Name="ErrorText" Foreground="{DynamicResource B.Danger}"
                            FontSize="12" TextWrapping="Wrap" MinHeight="18" Margin="0,10,0,0"/>
 
                 <Button x:Name="SubmitBtn" Content="로그인" Style="{StaticResource PrimaryBtn}"
                         MinHeight="42" FontSize="14" FontWeight="Bold" Margin="0,8,0,6"
                         Click="Submit_Click"/>
                 <Button Content="서버 주소 설정" Style="{StaticResource GhostBtn}"
-                        Background="Transparent" Foreground="{StaticResource B.MutedText}"
+                        Background="Transparent" Foreground="{DynamicResource B.MutedText}"
                         MinHeight="28" FontSize="11" Click="ServerSettings_Click"/>
                 <TextBlock x:Name="LoginVersionText" FontSize="11"
-                           Foreground="{StaticResource B.MutedText}"
+                           Foreground="{DynamicResource B.MutedText}"
                            HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                <Button x:Name="LoginThemeBtn" Content="다크 테마" Style="{StaticResource GhostBtn}"
+                        Background="Transparent" Foreground="{DynamicResource B.MutedText}"
+                        MinHeight="24" FontSize="11" Margin="0,6,0,0"
+                        Click="ThemeToggle_Click"/>
             </StackPanel>
         </Border>
     </Grid>
