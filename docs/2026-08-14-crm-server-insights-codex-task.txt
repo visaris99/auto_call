@@ -1,0 +1,108 @@
+================================================================
+milestone-crm 서버 작업 지시서 — 다이얼러 서버 인사이트 2종 구현
+(Codex 실행용 / 작성: 2026-08-14, 다이얼러 v2.7.1 기준)
+================================================================
+
+작업 저장소: /home/mirage/office/milestone-crm
+참조 설계서: auto_call 저장소 docs/superpowers/specs/2026-07-05-tm-dialer-crm-integration-design.md
+             (3.2 API 계약, 3.3 서버 구현 노트)
+
+## 배경
+
+Milestone Dialer(Windows, v2.7.1)는 리드 상담 이력과 오늘 실적 표시
+기능이 이미 구현돼 있고, 기능 게이트(TM_ENABLE_SERVER_INSIGHTS)로
+꺼져 있다. CRM에 아래 라우트 2개가 배포되면 게이트만 켜서 활성화한다.
+클라이언트는 절대 수정하지 말 것 — 이 작업은 서버 라우트 추가만이다.
+
+## 구현할 엔드포인트 (2개)
+
+### 1) GET /api/v1/leads/{id}/history?limit=10
+
+세션 사용자 본인에게 배정된 리드의 통화 이력. 원천 call_logs,
+calledAt 내림차순. limit 기본 10, 최대 50 (초과 요청은 50으로 클램프).
+
+응답 200:
+{
+  "items": [
+    {
+      "resultCode": "CALLBACK",
+      "memo": "다음주 재상담",
+      "talkSeconds": 154,
+      "calledAt": "2026-07-03T14:20:00+09:00",
+      "callbackAt": "2026-07-06T14:30:00+09:00"
+    }
+  ]
+}
+
+필드 계약 (다이얼러 Core/ApiModels.cs CallHistoryItem과 일치해야 함):
+- resultCode: string (CRM 결과코드 10종)
+- memo: string 또는 null (통화 메모)
+- talkSeconds: int
+- calledAt: string(ISO8601, +09:00 오프셋 포함) 또는 null
+- callbackAt: string(ISO8601) 또는 null
+
+규칙:
+- 권한 lead:read. 본인 배정 리드가 아니거나 리드가 없으면
+  404 NOT_FOUND (존재 여부 은닉 — 403 금지).
+- 이력이 없으면 200 + items: [] (404 아님).
+
+### 2) GET /api/v1/me/today
+
+세션 사용자의 KST(Asia/Seoul) "오늘" call_logs 집계.
+
+응답 200:
+{
+  "date": "2026-08-14",
+  "dials": 47,
+  "talkSeconds": 5820,
+  "byResult": { "NOANSWER": 20, "CALLBACK": 5, "INTERESTED": 8,
+                "CONSULT": 3, "WON": 2, "REJECT": 7, "DNC": 2 }
+}
+
+필드 계약 (Core/ApiModels.cs TodayStats와 일치):
+- date: string(YYYY-MM-DD, KST 기준)
+- dials: int (오늘 생성된 본인 call_logs 건수)
+- talkSeconds: int (합계)
+- byResult: { 결과코드: 건수 } — 0건인 코드는 생략 가능
+규칙:
+- 권한 lead:read. 오늘 기록이 없으면 0/빈 객체로 200.
+- 날짜 경계는 KST 자정. 서버가 UTC여도 KST로 계산할 것.
+
+## 구현 관례 (설계서 3.3 그대로)
+
+- 라우트: src/app/api/v1/leads/[id]/history/route.ts,
+  src/app/api/v1/me/today/route.ts — runtime "nodejs", force-dynamic.
+- 인증: 기존 getApiSession() (Authorization 헤더 기반) 재사용.
+- 권한: requirePermission의 API 변형(redirect 없음)으로 lead:read 확인.
+- proxy.ts matcher의 api/v1 제외가 이미 있는지 확인.
+- CORS 불필요 (클라이언트는 브라우저 아님).
+- 기존 다이얼러 계약(/auth, /leads/queue, /call-attempts, /heartbeat,
+  /version 등)은 절대 변경하지 말 것.
+
+## 검증 (필수)
+
+1. CRM 저장소의 기존 계약/단위 테스트 전체 green.
+2. auto_call 저장소에서 실서버 통합 테스트:
+   cd /home/mirage/office/auto_call
+   TM_ITEST_URL=http://127.0.0.1:3005 dotnet test dotnet/Tests --filter RealCrm
+   (dev CRM을 3005에 띄운 상태. history/today 케이스가 없으면
+   RealCrm 테스트에 두 라우트 검증을 추가해도 좋다 — 단 Core 프로덕션
+   코드는 수정 금지)
+3. 수동 확인: TM 계정 토큰으로
+   - 본인 리드 history 200 / 타인 리드 404 / limit=999 → 50 클램프
+   - me/today가 오늘 저장한 콜과 일치하는지
+
+## 배포 후 활성화 절차 (사람이 함, Codex 범위 아님)
+
+1. 운영 CRM에 라우트 배포.
+2. 다이얼러 PC에서 사용자 환경변수 설정 후 앱 재시작:
+   [Environment]::SetEnvironmentVariable("TM_ENABLE_SERVER_INSIGHTS", "1", "User")
+3. 다이얼러에서 확인: 고객 카드에 최근 이력 5건 표시,
+   상단 실적이 "오늘: 발신 N · 가입 N · 통화 H:MM:SS"로 확장됨.
+   (404가 하나라도 나면 다이얼러는 조용히 기존 동작으로 폴백)
+
+## 완료 보고
+
+- 추가/수정 파일 목록
+- 테스트 결과 (CRM 테스트 + RealCrm 통합 테스트)
+- 위 수동 확인 3종 결과
