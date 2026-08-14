@@ -123,7 +123,8 @@ public partial class LoginWindow : Window
         }
         catch (ApiException ex)
         {
-            ErrorText.Text = ex.Message;
+            // 코드 병기 — 상담원이 관리자에게 전화로 그대로 전달할 수 있게 한다.
+            ErrorText.Text = $"{ex.Message} [{Core.ErrorCatalog.FromApi(ex).Code}]";
         }
         finally
         {

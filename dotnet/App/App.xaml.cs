@@ -31,8 +31,11 @@ public partial class App : Application
         DispatcherUnhandledException += (_, args) =>
         {
             LogError(args.Exception.ToString());
-            MessageBox.Show($"예기치 못한 오류가 발생했습니다.\n{args.Exception.Message}",
-                "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            ErrorDialogWindow.Show(Current?.MainWindow, ErrorCatalog.App(
+                ErrorCatalog.AppUnhandled,
+                $"예기치 못한 오류가 발생했습니다: {args.Exception.Message}",
+                "작업을 다시 시도하세요. 반복되면 [관리자 보고 복사]로 관리자에게 전달하세요.",
+                args.Exception.GetType().Name));
             args.Handled = true;
         };
         // 창을 만들기 전에 저장된 테마를 적용한다 (DynamicResource라 이후 토글도 즉시 반영).
@@ -61,11 +64,10 @@ public partial class App : Application
             {
                 if (userInitiated)
                 {
-                    MessageBox.Show(
-                        "업데이트 정보를 가져오지 못했습니다. 잠시 후 다시 시도하세요.",
-                        "업데이트",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    ErrorDialogWindow.Show(Current?.MainWindow, ErrorCatalog.Update(
+                        ErrorCatalog.UpdateCheckFailed,
+                        $"업데이트 정보를 가져오지 못했습니다. (서버: {config.ServerUrl})",
+                        "잠시 후 다시 시도하세요. 반복되면 관리자에게 아래 코드를 전달하세요."));
                 }
                 return;
             }
@@ -85,11 +87,11 @@ public partial class App : Application
             {
                 if (userInitiated)
                 {
-                    MessageBox.Show(
-                        "검증 가능한 업데이트 설치파일이 등록되지 않았습니다. 관리자에게 문의하세요.",
-                        "업데이트",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    ErrorDialogWindow.Show(Current?.MainWindow, ErrorCatalog.Update(
+                        ErrorCatalog.UpdateNotConfigured,
+                        "검증 가능한 업데이트 설치파일이 서버에 등록되지 않았습니다.",
+                        "관리자에게 아래 코드를 전달하세요. 업데이트 서버 등록 상태 점검이 필요합니다.",
+                        targetVersion: info.LatestVersion));
                 }
                 return;
             }
@@ -142,12 +144,11 @@ public partial class App : Application
         {
             LogError($"VerifiedUpdate 실패 [{ex.Code}]: {ex.Message}");
             window?.Close();
-            MessageBox.Show(
-                $"업데이트 검증 또는 설치에 실패했습니다. ({ex.Code})\n" +
-                "기존 버전으로 계속 실행합니다. 관리자에게 오류 코드를 전달하세요.",
-                "업데이트",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            ErrorDialogWindow.Show(Current?.MainWindow, ErrorCatalog.Update(
+                ErrorCatalog.UpdateInstallFailed,
+                "업데이트 검증 또는 설치에 실패했습니다. 기존 버전으로 계속 실행합니다.",
+                "[관리자 보고 복사]를 눌러 관리자에게 전달하세요. 세부코드가 원인 판별에 필요합니다.",
+                detailCode: ex.Code));
         }
         catch (Exception ex) when (ex is ApiException or HttpRequestException
             or IOException or TaskCanceledException or System.ComponentModel.Win32Exception
@@ -157,11 +158,13 @@ public partial class App : Application
             window?.Close();
             if (userInitiated)
             {
-                MessageBox.Show(
-                    "업데이트를 확인하지 못했습니다. 네트워크 연결을 확인한 뒤 다시 시도하세요.",
-                    "업데이트",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                ErrorDialogWindow.Show(Current?.MainWindow, ErrorCatalog.Update(
+                    ErrorCatalog.UpdateCheckFailed,
+                    ex is UnauthorizedAccessException or IOException
+                        ? $"업데이트 파일 처리에 실패했습니다: {ex.Message}"
+                        : "업데이트 서버에 연결하지 못했습니다.",
+                    "네트워크 연결을 확인한 뒤 다시 시도하세요. 반복되면 관리자에게 아래 코드를 전달하세요.",
+                    detailCode: ex.GetType().Name));
             }
         }
     }

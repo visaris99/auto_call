@@ -288,7 +288,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             // 일시 오류 — 다음 갱신에서 재시도
         }
     }
@@ -440,12 +440,12 @@ public partial class MainWindow : Window
         }
         catch (NetworkException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
         }
         finally
         {
@@ -540,7 +540,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         finally
@@ -756,12 +756,12 @@ public partial class MainWindow : Window
         }
         catch (NetworkException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             SetCrm(false);
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             RevealContactBtn.ToolTip = $"{ex.Message} ({ex.Code})";
         }
         finally
@@ -794,6 +794,7 @@ public partial class MainWindow : Window
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException
                                    or InvalidOperationException)
         {
+            _lastError = $"[{ErrorCatalog.AppClipboard}] 클립보드 복사 실패: {ex.GetType().Name}";
             FlashBanner("클립보드에 전화번호를 복사하지 못했습니다");
         }
     }
@@ -1018,11 +1019,14 @@ public partial class MainWindow : Window
             UpdateCallControls();
             if (showError)
             {
+                string adbCode = commandSent ? ErrorCatalog.AdbStateUnknown : ErrorCatalog.AdbHangupFailed;
                 string detail = commandSent
                     ? "종료 명령을 보냈지만 단말의 통화 종료 상태를 확인하지 못했습니다."
-                    : "단말에 통화 종료 명령을 보내지 못했습니다.";
-                MessageBox.Show($"{detail}\n휴대폰에서 통화를 종료한 뒤 다시 시도하세요.", "통화 종료",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                    : "단말에 통화 종료 명령을 보내지 못했습니다. USB 연결이 끊겼을 수 있습니다.";
+                _lastError = $"[{adbCode}] {detail}";
+                ErrorDialogWindow.Show(this, ErrorCatalog.Adb(adbCode, detail,
+                    "휴대폰에서 통화를 종료한 뒤 다시 시도하세요. 반복되면 USB 케이블을 다시 연결하고 관리자에게 전달하세요.",
+                    _adbSerial), ReportUser);
             }
             return false;
         }
@@ -1466,7 +1470,7 @@ public partial class MainWindow : Window
         }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = FormatLastError(ex);
             // 다음 주기에 재시도
         }
         finally
@@ -1477,44 +1481,61 @@ public partial class MainWindow : Window
 
     // ---------- 공통 ----------
 
+    /// <summary>하트비트 lastError 정규화 — CRM 예외는 항상 [코드] 접두(운영 집계용).</summary>
+    private static string FormatLastError(Exception ex) =>
+        ex is ApiException api ? $"[{ErrorCatalog.FromApi(api).Code}] {api.Message}" : ex.Message;
+
+    /// <summary>관리자 보고의 계정 표기 — 미로그인 상태면 생략.</summary>
+    private string? ReportUser =>
+        _client.User is { } u ? $"{u.OrgName} · {u.Name}" : null;
+
     private void HandleError(Exception ex)
     {
-        _lastError = ex.Message;
-        string user = $"{_client.User?.OrgName} · {_client.User?.Name}";
         switch (ex)
         {
             case AuthException:
+                _lastError = FormatLastError(ex);
                 OnAuthLost();
                 break;
             case NetworkException network:
                 SetCrm(false);
-                ErrorDialogWindow.Show(this, "연결 오류", network.Code, network.Message,
+                ShowApiError(network,
                     "인터넷 연결과 CRM 서버 상태를 확인한 뒤 다시 시도하세요. "
-                    + "저장하지 못한 통화 기록은 대기열에 보관돼 자동 재전송됩니다.", user);
+                    + "저장하지 못한 통화 기록은 대기열에 보관돼 자동 재전송됩니다.");
                 break;
             case NightBlockedException night:
-                ErrorDialogWindow.Show(this, "야간 발신 제한", night.Code, night.Message,
-                    "야간에는 발신할 수 없습니다. 콜백예약으로 다음 영업시간에 다시 연락하세요.", user);
+                ShowApiError(night,
+                    "야간에는 발신할 수 없습니다. 콜백예약으로 다음 영업시간에 다시 연락하세요.");
                 break;
             case DncBlockedException dnc:
                 // 사용자에게 새로고침을 시키는 대신 앱이 직접 큐를 갱신한다.
                 _ = RefreshQueueAsync();
-                ErrorDialogWindow.Show(this, "수신거부 발신 차단", dnc.Code,
-                    "수신거부(DNC) 고객이라 발신이 차단되었습니다.",
-                    "큐를 자동으로 새로고침했습니다. 다음 리드로 진행하세요.", user);
+                ShowApiError(dnc, "큐를 자동으로 새로고침했습니다. 다음 리드로 진행하세요.");
                 break;
             case ApiException api:
-                ErrorDialogWindow.Show(this, "요청 실패", api.Code, api.Message,
-                    "잠시 후 다시 시도하세요. 같은 오류가 반복되면 "
-                    + "'관리자 보고 복사'로 내용을 전달하세요.", user);
+                ShowApiError(api, nextActionOverride: null);
                 break;
             default:
                 App.LogError(ex.ToString());
-                ErrorDialogWindow.Show(this, "예기치 못한 오류", ex.GetType().Name, ex.Message,
+                _lastError = $"[{ErrorCatalog.AppUnhandled}] {ex.Message}";
+                ErrorDialogWindow.Show(this, ErrorCatalog.App(
+                    ErrorCatalog.AppUnhandled,
+                    ex.Message,
                     "앱은 계속 사용할 수 있습니다. 같은 문제가 반복되면 "
-                    + "'관리자 보고 복사'로 내용을 전달하세요.", user);
+                    + "'관리자 보고 복사'로 내용을 전달하세요.",
+                    ex.GetType().Name), ReportUser);
                 break;
         }
+    }
+
+    /// <summary>카탈로그 보고 표시 — 원인·코드는 카탈로그 고정, 다음 행동만 화면 맥락으로 덧입힌다.</summary>
+    private void ShowApiError(ApiException ex, string? nextActionOverride)
+    {
+        ErrorReport report = ErrorCatalog.FromApi(ex);
+        if (nextActionOverride != null)
+            report = report with { NextAction = nextActionOverride };
+        _lastError = $"[{report.Code}] {ex.Message}";
+        ErrorDialogWindow.Show(this, report, ReportUser);
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)
