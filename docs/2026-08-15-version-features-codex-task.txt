@@ -1,0 +1,53 @@
+================================================================
+milestone-crm 서버 작업 지시서 — /version 원격 기능 게이트(features)
+(Codex 실행용 / 작성: 2026-08-15, 다이얼러 v2.8.1 기준)
+================================================================
+
+작업 저장소: /home/mirage/office/milestone-crm
+
+## 배경
+
+다이얼러 v2.8.1부터 서버 인사이트(상담 이력·오늘 실적)를 PC별 환경변수
+없이 서버가 원격으로 켜고 끌 수 있다. 클라이언트는 시작 시 /version
+응답의 features를 1회 읽어 게이트를 평가한다. 이 작업은 /version 응답에
+필드 하나를 추가하는 것이 전부다. 클라이언트는 수정하지 말 것.
+
+## 구현
+
+GET /api/v1/version (무인증 공개 라우트, 기존) 응답에 추가:
+
+{
+  "minVersion": "...",
+  "latestVersion": "...",
+  ... (기존 업데이트 매니페스트 필드 그대로) ...
+  "features": { "serverInsights": true }
+}
+
+규칙:
+- features는 { 문자열: 불리언 } 객체. 현재 정의된 키는 serverInsights 하나.
+- 값의 소스는 서버 재량(서버 환경변수 또는 관리자 설정). 권장:
+  CRM 서버 환경변수 DIALER_FEATURE_SERVER_INSIGHTS=1 이면 true.
+- history·me/today 라우트가 배포·검증된 뒤에만 true로 켤 것.
+- 필드를 생략하거나 false면 클라이언트는 꺼짐 처리(구버전 호환·원격 롤백).
+- /version은 무인증이므로 민감정보를 features에 넣지 말 것.
+
+## 클라이언트 동작 (참고 — 수정 금지)
+
+- 시작 시 1회 평가: features.serverInsights == true 이면 인사이트 활성.
+- PC 환경변수 TM_ENABLE_SERVER_INSIGHTS=1 은 강제 ON 오버라이드로 유지
+  (서버 플래그와 OR 결합) — 테스트·비상용.
+- 서버가 끄면 각 PC의 "다음 앱 시작" 시점부터 꺼진다(즉시 아님).
+
+## 검증
+
+1. CRM 테스트 green + /api/v1/version 응답에 features가 포함되는지 curl 확인.
+2. auto_call 통합 테스트:
+   cd /home/mirage/office/auto_call
+   TM_ITEST_URL=http://127.0.0.1:3005 dotnet test dotnet/Tests --filter RealCrm
+3. 수동: 플래그 ON 상태의 dev CRM에 다이얼러(환경변수 없이) 로그인 →
+   상단 실적이 "발신 N · 가입 N · 통화 H:MM:SS"로 확장되고
+   고객 카드에 최근 이력이 표시되는지.
+
+## 완료 보고
+
+- 수정 파일 목록, 플래그 값 소스(환경변수명 등), 테스트 결과.

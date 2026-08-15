@@ -397,6 +397,36 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task CheckVersion_ParsesRemoteFeatureGate()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("GET", "/api/v1/version", 200,
+            new
+            {
+                minVersion = "2.0.0",
+                latestVersion = "2.8.1",
+                downloadUrl = (string?)null,
+                features = new Dictionary<string, bool>
+                {
+                    ["serverInsights"] = true,
+                    ["somethingElse"] = false,
+                },
+            });
+        var info = await client.CheckVersionAsync();
+        Assert.True(info!.HasFeature(AppConfig.ServerInsightsFeatureName));
+        Assert.False(info.HasFeature("somethingElse"));
+        Assert.False(info.HasFeature("unknown"));
+    }
+
+    [Fact]
+    public void VersionInfo_HasFeature_FalseWithoutFeaturesField()
+    {
+        var info = new VersionInfo("2.0.0", "2.8.1", null);
+        Assert.False(info.HasFeature(AppConfig.ServerInsightsFeatureName));
+    }
+
+    [Fact]
     public async Task Heartbeat_SendsDeviceStatus()
     {
         var (crm, client) = await LoggedInAsync();

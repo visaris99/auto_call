@@ -9,6 +9,9 @@ public sealed class AppConfig
     public const string DefaultServerUrl = "https://crm.milestone-sales.xyz";
     public const string ServerInsightsFeatureFlag = "TM_ENABLE_SERVER_INSIGHTS";
 
+    /// <summary>/version 응답 features 딕셔너리에서 서버 인사이트를 켜는 키.</summary>
+    public const string ServerInsightsFeatureName = "serverInsights";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,  // 파이썬 config.json과 호환

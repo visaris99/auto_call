@@ -18,7 +18,9 @@ public partial class MainWindow : Window
     private readonly PendingCallQueue _pending = new();
     private readonly CallSessionCoordinator _callSession = new();
     private readonly HashSet<string> _completedLeadIds;
-    private readonly bool _serverInsightsEnabled;
+    // 서버 인사이트: 환경변수는 강제 ON 오버라이드, 평소에는 /version features로 원격 게이트.
+    private readonly bool _serverInsightsEnvOverride;
+    private bool _serverInsightsEnabled;
 
     private List<LeadItem> _leads = new();
     private LeadItem? _current;
@@ -92,7 +94,8 @@ public partial class MainWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 12);
         _client = client;
         _config = config;
-        _serverInsightsEnabled = AppConfig.IsServerInsightsEnabled();
+        _serverInsightsEnvOverride = AppConfig.IsServerInsightsEnabled();
+        _serverInsightsEnabled = _serverInsightsEnvOverride;
         _adbSerial = string.IsNullOrWhiteSpace(config.AdbSerial) ? null : config.AdbSerial;
         _completedLeadIds = new HashSet<string>(
             _pending.Items.Select(item => item.LeadId), StringComparer.Ordinal);
@@ -1684,6 +1687,7 @@ public partial class MainWindow : Window
     private async Task CheckVersionAsync()
     {
         var info = await _client.CheckVersionAsync();
+        ApplyServerFeatureGates(info);
         if (info == null || !System.Version.TryParse(Ui.Version, out var mine))
             return;
         if (System.Version.TryParse(info.MinVersion, out var required) && mine < required)
@@ -1697,6 +1701,33 @@ public partial class MainWindow : Window
         {
             UpdateLinkRun.Text = $"새 버전 v{info.LatestVersion} 받기";
             UpdateLink.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>
+    /// /version 응답의 features로 기능을 원격 게이트한다 (시작 시 1회 평가).
+    /// 응답이 없거나(오프라인·구서버) 필드가 없으면 환경변수 오버라이드만 남는다 —
+    /// 서버가 값을 끄면 다음 앱 시작 때 조용히 기존 동작으로 돌아간다(원격 롤백).
+    /// </summary>
+    private void ApplyServerFeatureGates(VersionInfo? info)
+    {
+        bool enabled = _serverInsightsEnvOverride
+            || info?.HasFeature(AppConfig.ServerInsightsFeatureName) == true;
+        if (enabled == _serverInsightsEnabled)
+            return;
+        _serverInsightsEnabled = enabled;
+        if (enabled)
+        {
+            _ = RefreshTodayAsync();
+            if (_current != null)
+                LoadHistory(_current);
+        }
+        else
+        {
+            _serverStats = false;
+            _historyToken++;
+            HistoryList.ItemsSource = null;
+            UpdateToday();
         }
     }
 

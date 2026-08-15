@@ -42,7 +42,13 @@ public sealed record VersionInfo(
     long? Size = null,
     string? PublishedAt = null,
     string? KeyId = null,
-    string? Signature = null);
+    string? Signature = null,
+    Dictionary<string, bool>? Features = null)
+{
+    /// <summary>서버가 /version의 features로 원격 게이트한 기능. 필드가 없으면 꺼짐(구서버 호환).</summary>
+    public bool HasFeature(string name) =>
+        Features != null && Features.TryGetValue(name, out bool enabled) && enabled;
+}
 
 public sealed record CallHistoryItem(
     string ResultCode,
