@@ -39,6 +39,30 @@ public class RealCrmIntegrationTests
         var second = await client.LogCallAsync(lead.Id, "INTERESTED", 42, "C# 통합테스트", null, key);
         Assert.Equal("INTERESTED", second.Lead.Status);
 
+        // 서버 인사이트 — 상담 이력·오늘 실적 (2026-08-14 지시서 검증)
+        List<CallHistoryItem>? history = await client.HistoryAsync(lead.Id);
+        Assert.NotNull(history);
+        Assert.NotEmpty(history!);
+        Assert.Equal("INTERESTED", history![0].ResultCode);
+        Assert.Equal(42, history[0].TalkSeconds);
+
+        TodayStats? today = await client.TodayAsync();
+        Assert.NotNull(today);
+        Assert.True(today!.Dials >= 1);
+        Assert.True(today.TalkSeconds >= 42);
+        Assert.NotNull(today.ByResult);
+        Assert.True(today.ByResult!.GetValueOrDefault("INTERESTED") >= 1);
+
+        // 타인·미존재 리드 이력은 404 존재 은닉 → 클라이언트는 null 폴백
+        Assert.Null(await client.HistoryAsync("00000000-0000-4000-8000-000000000000"));
+
+        // /version 원격 기능 게이트 (2026-08-15 지시서 검증)
+        // — dev CRM을 DIALER_FEATURE_SERVER_INSIGHTS=1 로 띄운 상태여야 통과
+        VersionInfo? version = await client.CheckVersionAsync();
+        Assert.NotNull(version);
+        Assert.True(version!.HasFeature("serverInsights"));
+        Assert.False(version.HasFeature("nonexistentFeature"));
+
         // 임의 리드 접근 거부
         var denied = await Assert.ThrowsAnyAsync<ApiException>(
             () => client.RevealAsync("00000000-0000-4000-8000-000000000000"));
