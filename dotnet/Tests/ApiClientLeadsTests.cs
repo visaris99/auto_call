@@ -125,7 +125,9 @@ public class ApiClientLeadsTests
         using var _ = crm;
         crm.Set("POST", "/api/v1/leads/L1/reveal", 200, new { phone = "01012341234" });
         Assert.Equal("01012341234", await client.RevealAsync("L1"));
-        Assert.Equal("TM 발신", crm.Last.Body!.Value.GetProperty("reason").GetString());
+        string reason = crm.Last.Body!.Value.GetProperty("reason").GetString()!;
+        Assert.Equal("TM 발신", reason);
+        Assert.InRange(reason.Length, 2, 2000);
     }
 
     [Fact]
@@ -140,8 +142,9 @@ public class ApiClientLeadsTests
 
         Assert.Equal("김철수", contact.Name);
         Assert.Equal("01012341234", contact.Phone);
-        Assert.Equal("담당 리드 연락처 확인",
-            crm.Last.Body!.Value.GetProperty("reason").GetString());
+        string reason = crm.Last.Body!.Value.GetProperty("reason").GetString()!;
+        Assert.Equal("담당 리드 연락처 확인", reason);
+        Assert.InRange(reason.Length, 2, 2000);
     }
 
     [Fact]
@@ -329,6 +332,38 @@ public class ApiClientLeadsTests
     }
 
     [Fact]
+    public async Task StartCallAttempt_DeviceNotReady409_ThrowsDedicatedException()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/call-attempts", 409,
+            DeviceError("DEVICE_NOT_READY", "발신 장치가 준비되지 않았습니다."));
+
+        DeviceNotReadyException error = await Assert.ThrowsAsync<DeviceNotReadyException>(() =>
+            client.StartCallAttemptAsync("L1", "pc-abc", "R3CN123", AttemptId));
+
+        Assert.Equal(409, error.HttpStatus);
+        Assert.Equal("발신 장치 준비 필요", DeviceNotReadyException.DialogTitle);
+    }
+
+    [Fact]
+    public async Task StartCallAttempt_DeviceOwnershipConflict409_ThrowsDedicatedException()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/call-attempts", 409,
+            DeviceError("DEVICE_OWNERSHIP_CONFLICT", "다른 사용자의 장치입니다."));
+
+        DeviceOwnershipConflictException error =
+            await Assert.ThrowsAsync<DeviceOwnershipConflictException>(() =>
+                client.StartCallAttemptAsync("L1", "pc-abc", "R3CN123", AttemptId));
+
+        Assert.Equal(409, error.HttpStatus);
+        Assert.Contains("CRM 관리자에게 장치 해제를 요청",
+            DeviceOwnershipConflictException.NextAction);
+    }
+
+    [Fact]
     public async Task UpdateLeadName_SendsPatch_WithNameBody()
     {
         var (crm, client) = await LoggedInAsync();
@@ -445,4 +480,31 @@ public class ApiClientLeadsTests
         Assert.True(body.Value.GetProperty("adbConnected").GetBoolean());
         Assert.Equal("last", body.Value.GetProperty("lastError").GetString());
     }
+
+    [Fact]
+    public async Task Heartbeat_DeviceNotReady409_ThrowsDedicatedException()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/devices/heartbeat", 409,
+            DeviceError("DEVICE_NOT_READY", "발신 장치가 준비되지 않았습니다."));
+
+        await Assert.ThrowsAsync<DeviceNotReadyException>(() =>
+            client.HeartbeatAsync("pc-abc", "2.8.2", true, null));
+    }
+
+    [Fact]
+    public async Task Heartbeat_DeviceOwnershipConflict409_ThrowsDedicatedException()
+    {
+        var (crm, client) = await LoggedInAsync();
+        using var _ = crm;
+        crm.Set("POST", "/api/v1/devices/heartbeat", 409,
+            DeviceError("DEVICE_OWNERSHIP_CONFLICT", "다른 사용자의 장치입니다."));
+
+        await Assert.ThrowsAsync<DeviceOwnershipConflictException>(() =>
+            client.HeartbeatAsync("pc-abc", "2.8.2", true, null));
+    }
+
+    private static object DeviceError(string code, string message) =>
+        new { error = new { code, message } };
 }

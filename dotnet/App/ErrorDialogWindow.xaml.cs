@@ -1,4 +1,5 @@
 using System.Windows;
+using Core;
 
 namespace MilestoneDialer;
 
@@ -30,16 +31,10 @@ public partial class ErrorDialogWindow : Window
     }
 
     /// <summary>관리자에게 전달할 보고 텍스트를 조립한다 (전화번호 등 PII 미포함).</summary>
-    public static string BuildReport(string code, string title, string message, string? user)
-    {
-        return "[Milestone Dialer 오류 보고]\n"
-               + $"시각: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n"
-               + $"버전: {Ui.Version}\n"
-               + $"코드: {(string.IsNullOrWhiteSpace(code) ? "(없음)" : code)}\n"
-               + $"구분: {title}\n"
-               + $"내용: {message}\n"
-               + $"사용자: {user ?? "(미로그인)"}";
-    }
+    public static string BuildReport(string code, string title, string message, string? user,
+        string? requestId = null) =>
+        ErrorReportFormatter.Build(Ui.Version, code, title, message, user, requestId,
+            DateTimeOffset.Now);
 
     public static void Show(
         Window? owner,
@@ -47,11 +42,12 @@ public partial class ErrorDialogWindow : Window
         string code,
         string message,
         string nextAction,
-        string? user = null)
+        string? user = null,
+        string? requestId = null)
     {
         var dialog = new ErrorDialogWindow(
             title, code, message, nextAction,
-            BuildReport(code, title, message, user));
+            BuildReport(code, title, message, user, requestId));
         if (owner is { IsLoaded: true })
             dialog.Owner = owner;
         else

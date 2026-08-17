@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private string? _revealedPhone;
     private bool _adbConnected;
     private bool _sendingHeartbeat;
+    private bool _deviceOwnershipConflictShown;
     private bool _refreshingDevices;
     private bool _refreshingQueue;
     private bool _queueLoaded;
@@ -436,6 +437,7 @@ public partial class MainWindow : Window
         {
             await _client.HeartbeatAsync(_config.DeviceCode, Ui.Version, _adbConnected, lastError);
             _lastError = null;
+            _deviceOwnershipConflictShown = false;
         }
         catch (AuthException)
         {
@@ -446,9 +448,20 @@ public partial class MainWindow : Window
             _lastError = ex.Message;
             SetCrm(false);
         }
+        catch (DeviceOwnershipConflictException ex)
+        {
+            _lastError = $"[{ex.Code}] {ex.Message}";
+            if (!_deviceOwnershipConflictShown)
+                ShowDeviceOwnershipConflict(ex);
+        }
+        catch (DeviceNotReadyException ex)
+        {
+            _lastError = $"[{ex.Code}] {ex.Message}";
+            StripFlash("발신 장치 준비 상태를 확인하세요 — USB·ADB 연결 또는 장치 등록 필요");
+        }
         catch (ApiException ex)
         {
-            _lastError = ex.Message;
+            _lastError = $"[{ex.Code}] {ex.Message}";
         }
         finally
         {
@@ -1493,23 +1506,34 @@ public partial class MainWindow : Window
                 SetCrm(false);
                 ErrorDialogWindow.Show(this, "연결 오류", network.Code, network.Message,
                     "인터넷 연결과 CRM 서버 상태를 확인한 뒤 다시 시도하세요. "
-                    + "저장하지 못한 통화 기록은 대기열에 보관돼 자동 재전송됩니다.", user);
+                    + "저장하지 못한 통화 기록은 대기열에 보관돼 자동 재전송됩니다.", user,
+                    network.RequestId);
                 break;
             case NightBlockedException night:
                 ErrorDialogWindow.Show(this, "야간 발신 제한", night.Code, night.Message,
-                    "야간에는 발신할 수 없습니다. 콜백예약으로 다음 영업시간에 다시 연락하세요.", user);
+                    "야간에는 발신할 수 없습니다. 콜백예약으로 다음 영업시간에 다시 연락하세요.", user,
+                    night.RequestId);
                 break;
             case DncBlockedException dnc:
                 // 사용자에게 새로고침을 시키는 대신 앱이 직접 큐를 갱신한다.
                 _ = RefreshQueueAsync();
                 ErrorDialogWindow.Show(this, "수신거부 발신 차단", dnc.Code,
                     "수신거부(DNC) 고객이라 발신이 차단되었습니다.",
-                    "큐를 자동으로 새로고침했습니다. 다음 리드로 진행하세요.", user);
+                    "큐를 자동으로 새로고침했습니다. 다음 리드로 진행하세요.", user,
+                    dnc.RequestId);
+                break;
+            case DeviceOwnershipConflictException ownership:
+                ShowDeviceOwnershipConflict(ownership);
+                break;
+            case DeviceNotReadyException notReady:
+                ErrorDialogWindow.Show(this, DeviceNotReadyException.DialogTitle, notReady.Code,
+                    notReady.Message,
+                    DeviceNotReadyException.NextAction, user, notReady.RequestId);
                 break;
             case ApiException api:
                 ErrorDialogWindow.Show(this, "요청 실패", api.Code, api.Message,
                     "잠시 후 다시 시도하세요. 같은 오류가 반복되면 "
-                    + "'관리자 보고 복사'로 내용을 전달하세요.", user);
+                    + "'관리자 보고 복사'로 내용을 전달하세요.", user, api.RequestId);
                 break;
             default:
                 App.LogError(ex.ToString());
@@ -1518,6 +1542,15 @@ public partial class MainWindow : Window
                     + "'관리자 보고 복사'로 내용을 전달하세요.", user);
                 break;
         }
+    }
+
+    private void ShowDeviceOwnershipConflict(DeviceOwnershipConflictException error)
+    {
+        _deviceOwnershipConflictShown = true;
+        string user = $"{_client.User?.OrgName} · {_client.User?.Name}";
+        ErrorDialogWindow.Show(this, DeviceOwnershipConflictException.DialogTitle,
+            error.Code, error.Message, DeviceOwnershipConflictException.NextAction,
+            user, error.RequestId);
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)

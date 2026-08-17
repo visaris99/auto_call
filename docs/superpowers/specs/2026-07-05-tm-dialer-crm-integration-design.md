@@ -118,7 +118,7 @@
 
 #### `POST /leads/{id}/reveal`
 
-요청: `{ "reason": "TM 발신" }` (2자 이상 필수 — 기존 `revealPII` 규칙)
+요청: `{ "reason": "TM 발신" }` (2~2000자 필수 — `revealPII` 규칙)
 
 응답 200: `{ "phone": "01012345678" }` (정규화된 숫자, `normalizePhone` 기준)
 

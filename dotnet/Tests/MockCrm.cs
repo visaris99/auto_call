@@ -19,6 +19,9 @@ public sealed class MockCrm : IDisposable
     /// <summary>라우트: (METHOD, 쿼리스트링 제외 경로) → (status, body) 또는 Handler.</summary>
     public ConcurrentDictionary<(string Method, string Path), object> Routes { get; } = new();
 
+    private ConcurrentDictionary<(string Method, string Path),
+        ConcurrentDictionary<string, string>> ResponseHeaders { get; } = new();
+
     public ConcurrentQueue<(string Method, string Path, Dictionary<string, string> Headers, JsonElement? Body)>
         Requests { get; } = new();
 
@@ -40,6 +43,14 @@ public sealed class MockCrm : IDisposable
 
     public void Set(string method, string path, Handler handler) =>
         Routes[(method, path)] = handler;
+
+    public void SetResponseHeader(string method, string path, string name, string value)
+    {
+        ConcurrentDictionary<string, string> headers = ResponseHeaders.GetOrAdd(
+            (method, path), _ => new ConcurrentDictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase));
+        headers[name] = value;
+    }
 
     public (string Method, string Path, Dictionary<string, string> Headers, JsonElement? Body) Last =>
         Requests.Last();
@@ -95,6 +106,11 @@ public sealed class MockCrm : IDisposable
         }
 
         ctx.Response.StatusCode = status;
+        if (ResponseHeaders.TryGetValue((method, path), out var responseHeaders))
+        {
+            foreach (var (name, value) in responseHeaders)
+                ctx.Response.Headers[name] = value;
+        }
         if (payload != null)
         {
             byte[] data = JsonSerializer.SerializeToUtf8Bytes(payload);

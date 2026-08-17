@@ -50,6 +50,7 @@ public sealed class ApiClient
 
         using (res)
         {
+            string? headerRequestId = HeaderRequestId(res);
             if ((int)res.StatusCode == 204)
                 return null;
 
@@ -63,7 +64,8 @@ public sealed class ApiClient
             catch (JsonException)
             {
                 throw new ApiException("INTERNAL",
-                    $"서버 응답 오류(HTTP {(int)res.StatusCode})", (int)res.StatusCode);
+                    $"서버 응답 오류(HTTP {(int)res.StatusCode})", (int)res.StatusCode,
+                    headerRequestId);
             }
 
             if (res.IsSuccessStatusCode)
@@ -71,28 +73,53 @@ public sealed class ApiClient
 
             string code = "INTERNAL";
             string message = "알 수 없는 오류가 발생했습니다.";
+            string? bodyRequestId = null;
             if (data.TryGetProperty("error", out var err))
             {
                 if (err.TryGetProperty("code", out var c)) code = c.GetString() ?? code;
                 if (err.TryGetProperty("message", out var m)) message = m.GetString() ?? message;
+                if (err.TryGetProperty("requestId", out var r)
+                    && r.ValueKind == JsonValueKind.String)
+                    bodyRequestId = r.GetString();
             }
-            throw ErrorFor((int)res.StatusCode, code, message);
+            string? requestId = string.IsNullOrWhiteSpace(bodyRequestId)
+                ? headerRequestId
+                : bodyRequestId;
+            throw ErrorFor((int)res.StatusCode, code, message, requestId);
         }
     }
 
-    private static ApiException ErrorFor(int status, string code, string message) => code switch
+    private static string? HeaderRequestId(HttpResponseMessage response)
     {
-        "MFA_REQUIRED" => new MfaRequiredException(code, message, status),
-        "NIGHT_BLOCKED" => new NightBlockedException(code, message, status),
-        "DNC_BLOCKED" => new DncBlockedException(code, message, status),
-        "UNAUTHENTICATED" when status == 401 => new AuthException(code, message, status),
-        _ => new ApiException(code, message, status),
+        if (!response.Headers.TryGetValues("x-request-id", out IEnumerable<string>? values))
+            return null;
+        string? value = values.FirstOrDefault();
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static ApiException ErrorFor(int status, string code, string message,
+        string? requestId) => code switch
+    {
+        "MFA_REQUIRED" => new MfaRequiredException(code, message, status, requestId),
+        "PASSWORD_CHANGE_REQUIRED" =>
+            new PasswordChangeRequiredException(code, message, status, requestId),
+        "NIGHT_BLOCKED" => new NightBlockedException(code, message, status, requestId),
+        "DNC_BLOCKED" => new DncBlockedException(code, message, status, requestId),
+        "DEVICE_NOT_READY" => new DeviceNotReadyException(code, message, status, requestId),
+        "DEVICE_OWNERSHIP_CONFLICT" =>
+            new DeviceOwnershipConflictException(code, message, status, requestId),
+        "UNAUTHENTICATED" when status == 401 =>
+            new AuthException(code, message, status, requestId),
+        _ => new ApiException(code, message, status, requestId),
     };
 
     // ---- 인증 ----
 
     public async Task<UserInfo> LoginAsync(string loginId, string password, string? code = null)
     {
+        // 로그인 재시도 전에 이전 인증 상태를 폐기한다. 실패 응답은 인증 상태를 만들지 않는다.
+        _token = null;
+        User = null;
         object body = code is null
             ? new { loginId, password }
             : new { loginId, password, code };
@@ -187,14 +214,17 @@ public sealed class ApiClient
         return data!.Value.GetProperty("lead").Deserialize<LeadItem>(Json)!;
     }
 
-    /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.</summary>
+    /// <summary>발신 직전 1건 복호화. 평문은 반환값으로만 다루고 저장하지 않는다.
+    /// CRM 계약상 reason 길이는 2~2000자다.</summary>
     public async Task<string> RevealAsync(string leadId, string reason = "TM 발신")
     {
         LeadReveal contact = await RevealLeadAsync(leadId, reason).ConfigureAwait(false);
         return contact.Phone;
     }
 
-    public async Task<LeadReveal> RevealLeadAsync(string leadId, string reason = "담당 리드 연락처 확인")
+    /// <summary>담당 리드 연락처 확인. CRM 계약상 reason 길이는 2~2000자다.</summary>
+    public async Task<LeadReveal> RevealLeadAsync(string leadId,
+        string reason = "담당 리드 연락처 확인")
     {
         var data = await RequestAsync(HttpMethod.Post, $"/leads/{leadId}/reveal",
             new { reason }).ConfigureAwait(false);

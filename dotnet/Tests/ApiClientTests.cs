@@ -56,6 +56,36 @@ public class ApiClientTests
     }
 
     [Fact]
+    public async Task Login_PasswordChangeRequired_StaysUnauthenticated_AndHasPrompt()
+    {
+        using var crm = new MockCrm();
+        crm.Set("POST", "/api/v1/auth/login", 403, new
+        {
+            error = new
+            {
+                code = "PASSWORD_CHANGE_REQUIRED",
+                message = "비밀번호 변경이 필요합니다.",
+                requestId = "body-password-request",
+            },
+        });
+        crm.SetResponseHeader("POST", "/api/v1/auth/login", "x-request-id",
+            "header-password-request");
+        var client = new ApiClient(crm.Url);
+
+        PasswordChangeRequiredException error =
+            await Assert.ThrowsAsync<PasswordChangeRequiredException>(
+                () => client.LoginAsync("hong", "temporary"));
+
+        Assert.False(client.IsAuthenticated);
+        Assert.Null(client.User);
+        Assert.Equal(403, error.HttpStatus);
+        Assert.Equal("body-password-request", error.RequestId); // 본문이 헤더보다 우선
+        Assert.Contains(client.BaseUrl,
+            PasswordChangeRequiredException.BuildUserMessage(client.BaseUrl));
+        Assert.Equal("비밀번호 변경 필요", PasswordChangeRequiredException.DialogTitle);
+    }
+
+    [Fact]
     public async Task Login_InvalidCredentials_IsPlainApiException()
     {
         // INVALID_CREDENTIALS는 재로그인 유도(AuthException)가 아니라 일반 오류여야 한다.
@@ -66,6 +96,35 @@ public class ApiClientTests
             () => new ApiClient(crm.Url).LoginAsync("hong", "bad"));
         Assert.IsNotType<AuthException>(ex);
         Assert.Equal("INVALID_CREDENTIALS", ex.Code);
+    }
+
+    [Fact]
+    public async Task ErrorRequestId_FallsBackToResponseHeader()
+    {
+        using var crm = new MockCrm();
+        crm.Set("POST", "/api/v1/auth/login", 401,
+            new { error = new { code = "INVALID_CREDENTIALS", message = "로그인 실패" } });
+        crm.SetResponseHeader("POST", "/api/v1/auth/login", "x-request-id",
+            "header-only-request");
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(
+            () => new ApiClient(crm.Url).LoginAsync("hong", "bad"));
+
+        Assert.Equal("header-only-request", error.RequestId);
+    }
+
+    [Fact]
+    public void ErrorReport_IncludesRequestId_WithoutSensitiveFields()
+    {
+        string report = ErrorReportFormatter.Build(
+            "2.8.2", "DEVICE_NOT_READY", "발신 장치 준비 필요", "장치 확인 필요",
+            "영업1팀 · 홍길동", "request-123",
+            new DateTimeOffset(2026, 8, 17, 14, 30, 0, TimeSpan.FromHours(9)));
+
+        Assert.Contains("요청 ID: request-123", report);
+        Assert.DoesNotContain("Authorization", report);
+        Assert.DoesNotContain("Bearer", report);
+        Assert.DoesNotContain("01012341234", report);
     }
 
     [Fact]

@@ -103,13 +103,6 @@ public partial class LoginWindow : Window
         try
         {
             var user = await _client.LoginAsync(loginId, password, code);
-            if (user.MustChangePassword)
-            {
-                MessageBox.Show("초기 비밀번호 상태입니다.\n웹 CRM에서 비밀번호를 변경한 뒤 다시 로그인하세요.",
-                    "비밀번호 변경 필요", MessageBoxButton.OK, MessageBoxImage.Warning);
-                await _client.LogoutAsync();
-                return;
-            }
             _config.LastLoginId = user.LoginId;
             _config.Save();
             var main = new MainWindow(_client, _config);
@@ -120,6 +113,14 @@ public partial class LoginWindow : Window
         catch (MfaRequiredException ex)
         {
             ShowMfa(ex);
+        }
+        catch (PasswordChangeRequiredException)
+        {
+            // CRM은 이 응답에서 토큰을 발급하지 않으므로 로그아웃 호출도 하지 않는다.
+            MessageBox.Show(
+                PasswordChangeRequiredException.BuildUserMessage(_client.BaseUrl),
+                PasswordChangeRequiredException.DialogTitle,
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (ApiException ex)
         {
